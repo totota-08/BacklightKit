@@ -186,20 +186,22 @@ kbdlight dim 0
 import MacKeyboardBacklight
 
 guard let kb = KeyboardBacklight() else { return }   // 非対応機なら nil
+// …失敗の「理由」が必要なら:
+// let kb = try KeyboardBacklight.discover()         // DiscoveryError を投げる
 
 // 主語ファースト: キーボードを直接操作。
 kb.builtIn?.brightness = 1.0
 print(kb.defaultKeyboard.nits ?? -1)                 // 物理的な光量（nits・Double?）
 
-// 便利アクセサ（デフォルトキーボードへ委譲）
+// 便利アクセサ（dynamic member lookup で全プロパティをデフォルトキーボードへ委譲）
 kb.brightness = 0.5
 print(kb.brightness)
 
-// 失敗は観測可能 —— プロパティ setter は記録し…
-kb.brightness = 0.5
-if let err = kb.defaultKeyboard.lastSetError { print("失敗:", err) }
-// …throwing 版もある:
-try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .none / .slow / .fast
+// エラー方針は一本: 書き込みは全て throwing メソッドを持つ。
+// プロパティ setter は失敗を無視する fire-and-forget の便宜版。
+try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
+try kb.defaultKeyboard.setAutoBrightness(false)
+try kb.defaultKeyboard.setIdleDimTime(30)
 
 // スコープ付き手動制御: 輝度+autoを保存し、autoを切り、必ず復元する。
 try kb.withManualControl { board in
@@ -207,6 +209,13 @@ try kb.withManualControl { board in
         try board.setBrightness(1); usleep(120_000)
         try board.setBrightness(0); usleep(120_000)
     }
+}
+
+// async 版ならスレッドをブロックせず Task.sleep が使える。
+try await kb.withManualControl { board in
+    try board.setBrightness(1)
+    try await Task.sleep(nanoseconds: 120_000_000)
+    try board.setBrightness(0)
 }
 
 // 「非対応」は偽の 0 ではなく nil。
@@ -219,19 +228,22 @@ Task {
     }
 }
 
-// デフォルト以外も含め全キーボード。
+// デフォルト以外も含め全キーボード。Keyboard は Identifiable + Hashable なので
+// SwiftUI の ForEach にそのまま渡せる。
 for keyboard in kb.keyboards {
     print(keyboard.id, keyboard.isBuiltIn, keyboard.brightness)
 }
 ```
 
-**`Keyboard`** — `brightness`（get/set・`Double`）, `setBrightness(_:fade:) throws`, `lastSetError`,
-`nits: Double?`, `autoBrightness`, `setAutoBrightness(_:)`, `isSaturated/isSuppressed/isDimmed: Bool?`,
-`idleDimTime: Double?`, `disableIdleDim()`, `withManualControl { }`, `brightnessStream(pollInterval:)`,
-`isBuiltIn`, `supportsAmbient`。
+**`Keyboard`** — `brightness`（get/set・`Double`）, `setBrightness(_:fade:) throws`,
+`nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
+`isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?`（読み取り専用）,
+`setIdleDimTime(_:) throws`, `disableIdleDim() throws`, `withManualControl { }`（sync + async）,
+`brightnessStream(pollInterval:)`, `isBuiltIn`。`Identifiable`・`Hashable`・`Sendable`。
 
-**`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn` と委譲アクセサ。型は一貫して
-`Double`、非対応の読み取りは `Optional`。
+**`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
+（`DiscoveryError` で理由つき失敗）、加えて `Keyboard` 全プロパティの dynamic member 委譲。
+型は一貫して `Double`/`TimeInterval`、非対応の読み取りは `Optional`。
 
 ## サンプル
 

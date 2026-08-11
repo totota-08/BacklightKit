@@ -188,20 +188,23 @@ convenience accessors to the default (built-in) one.
 import MacKeyboardBacklight
 
 guard let kb = KeyboardBacklight() else { return }   // nil on unsupported hardware
+// …or, when you need to know WHY it failed:
+// let kb = try KeyboardBacklight.discover()         // throws a DiscoveryError
 
 // Subject-first: operate on a keyboard directly.
 kb.builtIn?.brightness = 1.0
 print(kb.defaultKeyboard.nits ?? -1)                 // physical output in nits (Double?)
 
-// Convenience: these forward to the default keyboard.
+// Convenience: every Keyboard property is forwarded to the default keyboard
+// (dynamic member lookup), so this just works:
 kb.brightness = 0.5
 print(kb.brightness)
 
-// Failure is observable — the property setter records it…
-kb.brightness = 0.5
-if let err = kb.defaultKeyboard.lastSetError { print("failed:", err) }
-// …or use the throwing form:
-try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .none / .slow / .fast
+// One error story: every write has a throwing method. The property setters are
+// fire-and-forget conveniences that ignore failure.
+try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
+try kb.defaultKeyboard.setAutoBrightness(false)
+try kb.defaultKeyboard.setIdleDimTime(30)
 
 // Scoped manual control: saves brightness + auto, disables auto, ALWAYS restores.
 try kb.withManualControl { board in
@@ -209,6 +212,13 @@ try kb.withManualControl { board in
         try board.setBrightness(1); usleep(120_000)
         try board.setBrightness(0); usleep(120_000)
     }
+}
+
+// The async variant lets you use Task.sleep instead of blocking a thread.
+try await kb.withManualControl { board in
+    try board.setBrightness(1)
+    try await Task.sleep(nanoseconds: 120_000_000)
+    try board.setBrightness(0)
 }
 
 // "Unsupported" is nil, never a fake 0.
@@ -221,19 +231,22 @@ Task {
     }
 }
 
-// Every keyboard, not just the default.
+// Every keyboard, not just the default. Keyboard is Identifiable + Hashable,
+// so kb.keyboards drops straight into SwiftUI's ForEach.
 for keyboard in kb.keyboards {
     print(keyboard.id, keyboard.isBuiltIn, keyboard.brightness)
 }
 ```
 
-**`Keyboard`** — `brightness` (get/set, `Double`), `setBrightness(_:fade:) throws`, `lastSetError`,
-`nits: Double?`, `autoBrightness`, `setAutoBrightness(_:)`, `isSaturated/isSuppressed/isDimmed: Bool?`,
-`idleDimTime: Double?`, `disableIdleDim()`, `withManualControl { }`, `brightnessStream(pollInterval:)`,
-`isBuiltIn`, `supportsAmbient`.
+**`Keyboard`** — `brightness` (get/set, `Double`), `setBrightness(_:fade:) throws`,
+`nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
+`isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?` (read-only),
+`setIdleDimTime(_:) throws`, `disableIdleDim() throws`, `withManualControl { }` (sync + async),
+`brightnessStream(pollInterval:)`, `isBuiltIn`. `Identifiable`, `Hashable`, `Sendable`.
 
-**`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, plus forwarding convenience
-accessors. Types are `Double` throughout; unsupported readings are `Optional`.
+**`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
+(reasoned failures via `DiscoveryError`), plus dynamic-member forwarding of every `Keyboard`
+property. Types are `Double`/`TimeInterval` throughout; unsupported readings are `Optional`.
 
 ## Examples
 

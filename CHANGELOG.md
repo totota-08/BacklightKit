@@ -3,6 +3,42 @@
 All notable changes to this project are documented here. Releases are cut automatically
 when the `version` in `Sources/kbdlight/main.swift` changes on `main`.
 
+## 0.3.0
+
+API-quality pass. **Breaking** — the public surface was reshaped while still in 0.x;
+migration is mechanical (see below).
+
+### Changed (breaking)
+- **One error story**: every write now has a throwing method — `setAutoBrightness(_:)`
+  and `setIdleDimTime(_:)`/`disableIdleDim()` now `throw` instead of returning `Bool`.
+  The writable properties (`brightness`, `autoBrightness`) are documented fire-and-forget
+  conveniences. `lastSetError` is gone — use `setBrightness(_:fade:)` when you need the error.
+- **`Morse.pulses(for:)` returns `Morse.Encoding`** (a struct with `pulses` + `skipped`)
+  instead of a tuple, so fields can be added without breaking callers.
+- **`idleDimTime` is read-only** — `= nil` used to be a silent no-op trap. Change it with
+  `setIdleDimTime(_:)` / `disableIdleDim()`.
+- **`supportsAmbient` → `supportsAutoBrightness`** — one term for the feature everywhere
+  (`info` output and `--json` key renamed accordingly).
+- **`FadeSpeed.none` → `.instant`** — says what it does and can never collide with
+  `Optional.none` in inference contexts.
+- Time values are typed `TimeInterval` (still `Double` under the hood).
+
+### Added
+- **`KeyboardBacklight.discover() throws`** — like `init?()` but tells you *why* discovery
+  failed (`DiscoveryError`: framework missing / private API changed / no backlit keyboard).
+  The CLI now uses it, so `kbdlight` error messages name the actual cause.
+- **Dynamic member forwarding**: `KeyboardBacklight` forwards *every* `Keyboard` property
+  to `defaultKeyboard` via `@dynamicMemberLookup` — no more hand-maintained mirror that
+  could drift out of sync.
+- **`withManualControl` async overload** — use `Task.sleep` instead of blocking a thread.
+- `Keyboard` is now `Identifiable`, `Hashable`, `Equatable` (by `id`) and
+  `CustomStringConvertible` — `kb.keyboards` drops straight into SwiftUI's `ForEach`.
+- `Keyboard` is `Sendable` for real now (no mutable state at all).
+
+### Changed
+- The CLI's `pulse` and `morse` are rebuilt on `withManualControl` (the library's own
+  restore machinery) instead of hand-rolling save/restore.
+
 ## 0.2.1
 
 Follow-up fixes from code review.

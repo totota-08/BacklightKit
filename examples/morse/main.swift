@@ -21,16 +21,16 @@ guard let kb = KeyboardBacklight() else {
     FileHandle.standardError.write(Data("no keyboard backlight on this Mac\n".utf8)); exit(1)
 }
 
-let (pulses, skipped) = Morse.pulses(for: text)
-guard !pulses.isEmpty else {
+let encoding = Morse.pulses(for: text)
+guard !encoding.pulses.isEmpty else {
     FileHandle.standardError.write(Data("nothing to send in \"\(text)\"\n".utf8)); exit(1)
 }
-if !skipped.isEmpty { print("skipping unsupported characters: \(String(skipped))") }
+if !encoding.skipped.isEmpty { print("skipping unsupported characters: \(String(encoding.skipped))") }
 print(String(format: "💡 sending \"%@\" — about %.1fs (unit %.0fms, peak %.0f%%)",
              text, Morse.duration(for: text, unit: unit), unit * 1000, peak * 100))
 
 kb.withManualControl { board in
-    for p in pulses {
+    for p in encoding.pulses {
         try? board.setBrightness(p.isOn ? peak : 0)
         usleep(useconds_t(unit * Double(p.units) * 1_000_000))
     }
