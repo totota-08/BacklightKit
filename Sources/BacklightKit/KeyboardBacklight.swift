@@ -90,6 +90,8 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
     private let canSaturated: Bool
     private let canSuppressed: Bool
     private let canDimmed: Bool
+    private let canSuspendIdleDim: Bool
+    private let canNotify: Bool
 
     init(id: UInt64, client: NSObject) {
         self.id = id
@@ -104,6 +106,8 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
         self.canSaturated     = has("isBacklightSaturatedOnKeyboard:")
         self.canSuppressed    = has("isBacklightSuppressedOnKeyboard:")
         self.canDimmed        = has("isBacklightDimmedOnKeyboard:")
+        self.canSuspendIdleDim = has("suspendIdleDimming:forKeyboard:") && has("isIdleDimmingSuspendedOnKeyboard:")
+        self.canNotify        = has("registerNotificationForKeys:keyboardID:block:")
     }
 
     // MARK: Brightness (0.0 ... 1.0)
@@ -194,6 +198,45 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
     /// Turn off idle-driven dimming (`setIdleDimTime(0)`).
     public func disableIdleDim() throws { try setIdleDimTime(0) }
 
+    // MARK: Idle-dim suspend (temporary, non-destructive)
+
+    /// Whether idle dimming is currently *suspended*. This is distinct from `idleDimTime`:
+    /// suspending pauses the dimming timer without changing its configured value, so the
+    /// original timeout resumes when you unsuspend. `nil` if unsupported.
+    public var isIdleDimmingSuspended: Bool? {
+        canSuspendIdleDim ? boolCall("isIdleDimmingSuspendedOnKeyboard:") : nil
+    }
+
+    /// Suspend or resume idle dimming without touching the configured `idleDimTime` — use
+    /// this to keep the keyboard lit through a presentation, then hand control back
+    /// exactly as it was. Prefer `withIdleDimmingSuspended(_:)` for automatic restore.
+    /// Throws if the system rejects it or the feature is unavailable.
+    public func setIdleDimmingSuspended(_ suspended: Bool) throws {
+        let sel = NSSelectorFromString("suspendIdleDimming:forKeyboard:")
+        guard canSuspendIdleDim else { throw KeyboardBacklightError.unsupported("suspendIdleDimming") }
+        typealias Fn = @convention(c) (NSObject, Selector, Bool, UInt64) -> Bool
+        let ok = unsafeBitCast(client.method(for: sel), to: Fn.self)(client, sel, suspended, id)
+        if !ok { throw KeyboardBacklightError.setFailed }
+    }
+
+    /// Run `body` with idle dimming suspended, then restore the previous suspend state —
+    /// even if `body` throws. Unlike `withManualControl`, this leaves brightness and
+    /// auto-brightness untouched; it only pauses the idle-dim timer.
+    ///
+    /// ```swift
+    /// try keyboard.withIdleDimmingSuspended {
+    ///     runLongPresentation()          // keyboard stays lit the whole time
+    /// }
+    /// ```
+    @discardableResult
+    public func withIdleDimmingSuspended<T>(_ body: () throws -> T) throws -> T {
+        guard canSuspendIdleDim else { throw KeyboardBacklightError.unsupported("suspendIdleDimming") }
+        let wasSuspended = isIdleDimmingSuspended ?? false
+        try setIdleDimmingSuspended(true)
+        defer { try? setIdleDimmingSuspended(wasSuspended) }
+        return try body()
+    }
+
     // MARK: Scoped manual control
 
     /// Run `body` with manual control: saves the current brightness + auto-brightness,
@@ -246,13 +289,50 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
 
     // MARK: Change monitoring
 
-    /// Emits the current brightness first, then again on every change, by polling every
-    /// `pollInterval` seconds (clamped to ≥ 0.01). (Apple's private change-notification
-    /// selector exists but has an undocumented block signature; polling is the stable path.)
-    /// The stream ends when the consuming task is cancelled. The keyboard is retained by
-    /// the stream, so `discover()?.defaultKeyboard.brightnessStream()` works without
-    /// keeping your own reference.
-    public func brightnessStream(pollInterval: TimeInterval = 0.1) -> AsyncStream<Double> {
+    /// Emits the current brightness first, then again on every change.
+    ///
+    /// When the OS exposes its change-notification selector (verified on macOS 12+), this
+    /// is **event-driven** — the system pushes each change, so there is no polling and no
+    /// latency, and `pollInterval` is ignored. On systems where that selector is missing it
+    /// falls back to polling every `pollInterval` seconds (clamped to ≥ 0.01). Pass
+    /// `preferPolling: true` to force the polling path.
+    ///
+    /// The stream ends when the consuming task is cancelled. It retains what it needs, so
+    /// `discover()?.defaultKeyboard.brightnessStream()` works without keeping your own
+    /// reference.
+    public func brightnessStream(pollInterval: TimeInterval = 0.1,
+                                 preferPolling: Bool = false) -> AsyncStream<Double> {
+        if canNotify, !preferPolling, let stream = notificationStream() { return stream }
+        return pollingStream(pollInterval: pollInterval)
+    }
+
+    /// Event-driven path: a dedicated private client with its own notification block, so it
+    /// never disturbs the shared client's registrations. `nil` if a fresh client can't be made.
+    private func notificationStream() -> AsyncStream<Double>? {
+        guard let notifyClient = KeyboardBacklight.newBrightnessClient() else { return nil }
+        let regSel = NSSelectorFromString("registerNotificationForKeys:keyboardID:block:")
+        guard notifyClient.responds(to: regSel) else { return nil }
+        let kid = id
+        return AsyncStream { continuation in
+            // Push the current value up front, matching the polling path's contract.
+            continuation.yield(self.brightness)
+
+            let block: @convention(block) (AnyObject?, AnyObject?) -> Void = { _, value in
+                if let n = value as? NSNumber { continuation.yield(n.doubleValue) }
+            }
+            let keys = ["KeyboardBacklightBrightness"] as NSArray
+            typealias Reg = @convention(c) (NSObject, Selector, NSArray, UInt64, AnyObject) -> Void
+            unsafeBitCast(notifyClient.method(for: regSel), to: Reg.self)(notifyClient, regSel, keys, kid, block as AnyObject)
+
+            continuation.onTermination = { _ in
+                let unregSel = NSSelectorFromString("unregisterKeyboardNotificationBlock")
+                if notifyClient.responds(to: unregSel) { notifyClient.perform(unregSel) }
+            }
+        }
+    }
+
+    /// Polling fallback: sample brightness every `pollInterval` seconds.
+    private func pollingStream(pollInterval: TimeInterval) -> AsyncStream<Double> {
         let interval = max(0.01, pollInterval)
         return AsyncStream { continuation in
             let task = Task.detached {
@@ -345,6 +425,16 @@ public final class KeyboardBacklight: Sendable {
         return KeyboardBacklight(keyboards: keyboards, defaultKeyboard: def)
     }
 
+    /// Create a fresh `KeyboardBrightnessClient` instance (the private facade), or `nil`.
+    /// Used to give the change-notification stream its own client so it never disturbs the
+    /// shared client's registrations. `dlopen` is idempotent, so this is cheap to repeat.
+    static func newBrightnessClient() -> NSObject? {
+        guard dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_NOW) != nil,
+              let cls = NSClassFromString("KeyboardBrightnessClient") as? NSObject.Type
+        else { return nil }
+        return cls.init()
+    }
+
     private static func performDiscovery() throws -> ([Keyboard], Keyboard) {
         guard dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_NOW) != nil
         else { throw DiscoveryError.frameworkUnavailable }
@@ -391,8 +481,16 @@ public final class KeyboardBacklight: Sendable {
     public func disableIdleDim() throws {
         try defaultKeyboard.disableIdleDim()
     }
-    public func brightnessStream(pollInterval: TimeInterval = 0.1) -> AsyncStream<Double> {
-        defaultKeyboard.brightnessStream(pollInterval: pollInterval)
+    public func setIdleDimmingSuspended(_ suspended: Bool) throws {
+        try defaultKeyboard.setIdleDimmingSuspended(suspended)
+    }
+    @discardableResult
+    public func withIdleDimmingSuspended<T>(_ body: () throws -> T) throws -> T {
+        try defaultKeyboard.withIdleDimmingSuspended(body)
+    }
+    public func brightnessStream(pollInterval: TimeInterval = 0.1,
+                                 preferPolling: Bool = false) -> AsyncStream<Double> {
+        defaultKeyboard.brightnessStream(pollInterval: pollInterval, preferPolling: preferPolling)
     }
     @discardableResult
     public func withManualControl<T>(_ body: (Keyboard) throws -> T) rethrows -> T {

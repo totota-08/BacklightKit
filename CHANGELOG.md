@@ -3,6 +3,35 @@
 All notable changes to this project are documented here. Releases are cut automatically
 when the `version` in `Sources/backlit/main.swift` changes on `main`.
 
+## 0.4.0
+
+New capabilities from surveying the private `CoreBrightness` surface — additive, no breaking changes.
+
+### Added
+- **Event-driven `brightnessStream`**: when the OS exposes its change-notification selector
+  (verified macOS 12+), the stream is now push-based — the system delivers each change, so
+  there's no polling and no latency. Falls back to polling where the selector is missing;
+  `preferPolling: true` forces the old path. The notification path uses a dedicated private
+  client so it never disturbs other registrations. (Signature discovered by runtime probing:
+  `registerNotificationForKeys:keyboardID:block:`, keys must be passed explicitly.)
+- **Idle-dim suspend** (`isIdleDimmingSuspended`, `setIdleDimmingSuspended(_:)`,
+  `withIdleDimmingSuspended { }`): pause idle dimming *without* changing the configured
+  `idleDimTime`, then restore the prior state — even on throw. Distinct from `disableIdleDim()`,
+  which permanently sets the timeout to 0.
+- CLI: **`hold <command...>`** (run a command with idle dimming suspended) and **`watch`**
+  (print brightness on every change, event-driven). `info` now shows the suspend state.
+
+### Investigated but deferred (intentionally not shipped)
+- **Ambient light in lux (`currentLux`) and hardware brightness ramps
+  (`rampToBrightness:withDuration:`)** live on the lower-level private `KeyboardBacklight`
+  driver class, which must be bound to an `IOHIDServiceClient` via `addHIDServiceClient:`.
+  Runtime testing on Apple Silicon showed that passing anything but the exact backlight/ALS
+  HID service **crashes inside Apple's private code**, and that crash cannot be prevented with
+  `responds(to:)` guards. Shipping it would break this library's "never crashes, degrades
+  gracefully" contract, so it's deferred until the HID binding can be made provably safe.
+  The smooth-ramp *effect* remains available through the safe high-level path via
+  `setBrightness(_:fade:)` (`.slow` / `.fast`).
+
 ## 0.3.0
 
 API-quality pass and a rename. **Breaking** — the public surface was reshaped while

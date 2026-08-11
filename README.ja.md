@@ -180,6 +180,23 @@ backlit dim 5
 backlit dim 0
 ```
 
+### `hold <command...>`
+アイドル減光を**一時停止**した状態でコマンドを実行し、終わったら元の状態に戻します。設定済みの
+`dim` タイマーには触れません。作業中だけキーボードを点灯させ続けたいときに。
+
+```sh
+backlit hold sleep 300         # 5分間点灯を維持して復元
+backlit hold ./run-demo.sh     # デモの間だけ点灯
+```
+
+### `watch`
+明るさが変わるたびに出力。OSが対応していれば**イベント駆動**（システムが変化を push ——
+ポーリングなし・遅延なし）、非対応ならポーリングにフォールバック。`Ctrl-C` で終了。
+
+```sh
+backlit watch                  # まず現在値、以後は変化ごとに1行
+```
+
 ## ライブラリ
 
 操作する「主語」は `Keyboard` です。`KeyboardBacklight()` がそれらを見つけ、便利アクセサを
@@ -224,11 +241,18 @@ try await kb.withManualControl { board in
 // 「非対応」は偽の 0 ではなく nil。
 print(kb.isSuppressed ?? false, kb.defaultKeyboard.idleDimTime ?? 0)
 
-// 変更を（ポーリングで）監視する AsyncStream。
+// 変更を監視する AsyncStream。OSが対応していればイベント駆動（システムが変化を push ——
+// ポーリングなし）、非対応ならポーリングにフォールバック。
 Task {
     for await level in kb.defaultKeyboard.brightnessStream() {
         print("brightness →", level)
     }
+}
+
+// 設定済みの dim タイマーを変えずに、作業中だけ点灯を維持。body が throw しても
+// 直前の suspend 状態を必ず復元する。
+try kb.withIdleDimmingSuspended {
+    runLongPresentation()
 }
 
 // デフォルト以外も含め全キーボード。Keyboard は Identifiable + Hashable なので
@@ -241,8 +265,11 @@ for keyboard in kb.keyboards {
 **`Keyboard`** — `brightness`（get/set・`Double`）, `setBrightness(_:fade:) throws`,
 `nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
 `isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?`（読み取り専用）,
-`setIdleDimTime(_:) throws`, `disableIdleDim() throws`, `withManualControl { }`（sync + async）,
-`brightnessStream(pollInterval:)`, `isBuiltIn`。`Identifiable`・`Hashable`・`Sendable`。
+`setIdleDimTime(_:) throws`, `disableIdleDim() throws`,
+`isIdleDimmingSuspended: Bool?`, `setIdleDimmingSuspended(_:) throws`, `withIdleDimmingSuspended { }`,
+`withManualControl { }`（sync + async）,
+`brightnessStream(pollInterval:preferPolling:)`（対応環境ではイベント駆動）, `isBuiltIn`。
+`Identifiable`・`Hashable`・`Sendable`。
 
 **`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
 （`DiscoveryError` で理由つき失敗）、加えて `Keyboard` 全プロパティの dynamic member 委譲。

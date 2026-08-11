@@ -3,7 +3,7 @@ import BacklightKit
 
 // Single source of truth for the version. Bumping this on `main` is what drives the
 // Release workflow to tag + publish — the git tag is derived from here, never hand-synced.
-let version = "0.3.0"
+let version = "0.4.0"
 
 func die(_ msg: String) -> Never {
     FileHandle.standardError.write(Data("backlit: \(msg)\n".utf8)); exit(1)
@@ -27,6 +27,8 @@ func usage() {
       morse <text>         Blink text in Morse code. --unit SEC, --peak 0..1
       auto <on|off>        Toggle ambient auto-brightness
       dim <seconds>        Set idle-dim timeout (0 = never)
+      hold <cmd...>        Run a command with idle dimming suspended, then restore
+      watch                Print brightness on every change (event-driven; Ctrl-C to stop)
       help | --version
 
     GLOBAL:
@@ -71,7 +73,8 @@ catch { die("\(error)") }   // DiscoveryError says exactly what's missing
 
 let argv = Array(CommandLine.arguments.dropFirst())
 let cmd = argv.first ?? "info"
-let opts = parse(Array(argv.dropFirst()))
+let rawRest = Array(argv.dropFirst())           // verbatim args after the command (for `hold`)
+let opts = parse(rawRest)
 
 func targetKeyboard() -> Keyboard {
     guard let idStr = opts.value("--keyboard") else { return kb.defaultKeyboard }
@@ -196,8 +199,36 @@ case "info":
             print("  suppressed       : \(k.isSuppressed.map(String.init) ?? "n/a")")
             print("  dimmed (idle)    : \(k.isDimmed.map(String.init) ?? "n/a")")
             print("  idle dim time    : \(fmt(k.idleDimTime)) s")
+            print("  idle-dim susp.   : \(k.isIdleDimmingSuspended.map(String.init) ?? "n/a")")
         }
     }
+
+case "hold":
+    // Run a subcommand with idle dimming suspended, restoring the prior state after.
+    let sub = rawRest.filter { $0 != "--keyboard" && $0 != opts.value("--keyboard") }
+    guard !sub.isEmpty else { die("usage: backlit hold <command> [args...]") }
+    guard board.isIdleDimmingSuspended != nil else { die("idle-dim suspend not supported on this Mac") }
+    do {
+        try board.withIdleDimmingSuspended {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            proc.arguments = sub
+            try proc.run()
+            proc.waitUntilExit()
+            if proc.terminationStatus != 0 { exit(proc.terminationStatus) }
+        }
+    } catch { die("\(error)") }
+
+case "watch":
+    // Event-driven when the OS supports it; falls back to polling inside the library.
+    restoreOnInterrupt(brightness: board.brightness, auto: board.autoBrightness)
+    let stream = board.brightnessStream()
+    let sem = DispatchSemaphore(value: 0)
+    Task {
+        for await level in stream { print(String(format: "%.4f", level)) }
+        sem.signal()
+    }
+    sem.wait()
 
 default:
     die("unknown command '\(cmd)' — try 'backlit help'")

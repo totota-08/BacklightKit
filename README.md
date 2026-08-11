@@ -182,6 +182,23 @@ backlit dim 5
 backlit dim 0
 ```
 
+### `hold <command...>`
+Run a command with idle dimming **suspended**, then restore the previous state — without
+touching your configured `dim` timeout. Useful for keeping the keyboard lit through a task.
+
+```sh
+backlit hold sleep 300         # stay lit for 5 minutes, then restore
+backlit hold ./run-demo.sh     # lit for the demo's duration
+```
+
+### `watch`
+Print the brightness on every change. **Event-driven** where the OS supports it (the system
+pushes each change — no polling, no latency), falling back to polling otherwise. `Ctrl-C` to stop.
+
+```sh
+backlit watch                  # 0.5000, then a line per change
+```
+
 ## Library
 
 The subject you operate on is a `Keyboard`. `KeyboardBacklight()` discovers them and forwards
@@ -227,11 +244,18 @@ try await kb.withManualControl { board in
 // "Unsupported" is nil, never a fake 0.
 print(kb.isSuppressed ?? false, kb.defaultKeyboard.idleDimTime ?? 0)
 
-// Watch changes (polled) via an AsyncStream.
+// Watch changes via an AsyncStream. Event-driven where the OS supports it (the system
+// pushes each change — no polling), falling back to polling otherwise.
 Task {
     for await level in kb.defaultKeyboard.brightnessStream() {
         print("brightness →", level)
     }
+}
+
+// Keep the keyboard lit through a task without changing the configured dim timeout;
+// the previous suspend state is always restored, even if the body throws.
+try kb.withIdleDimmingSuspended {
+    runLongPresentation()
 }
 
 // Every keyboard, not just the default. Keyboard is Identifiable + Hashable,
@@ -244,8 +268,11 @@ for keyboard in kb.keyboards {
 **`Keyboard`** — `brightness` (get/set, `Double`), `setBrightness(_:fade:) throws`,
 `nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
 `isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?` (read-only),
-`setIdleDimTime(_:) throws`, `disableIdleDim() throws`, `withManualControl { }` (sync + async),
-`brightnessStream(pollInterval:)`, `isBuiltIn`. `Identifiable`, `Hashable`, `Sendable`.
+`setIdleDimTime(_:) throws`, `disableIdleDim() throws`,
+`isIdleDimmingSuspended: Bool?`, `setIdleDimmingSuspended(_:) throws`, `withIdleDimmingSuspended { }`,
+`withManualControl { }` (sync + async),
+`brightnessStream(pollInterval:preferPolling:)` (event-driven when available), `isBuiltIn`.
+`Identifiable`, `Hashable`, `Sendable`.
 
 **`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
 (reasoned failures via `DiscoveryError`), plus dynamic-member forwarding of every `Keyboard`
