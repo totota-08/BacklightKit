@@ -1,11 +1,11 @@
 <div align="center">
 
-# kbdlight ⌨️💡
+# BacklightKit ⌨️💡
 
-**Read and control the Mac's built-in keyboard backlight — from Swift or the shell.**
+**Read and control the Mac's built-in keyboard backlight — from Swift (`BacklightKit`) or the shell (`backlit`).**
 
-[![CI](https://github.com/totota-08/kbdlight/actions/workflows/ci.yml/badge.svg)](https://github.com/totota-08/kbdlight/actions/workflows/ci.yml)
-[![Release](https://github.com/totota-08/kbdlight/actions/workflows/release.yml/badge.svg)](https://github.com/totota-08/kbdlight/actions/workflows/release.yml)
+[![CI](https://github.com/totota-08/BacklightKit/actions/workflows/ci.yml/badge.svg)](https://github.com/totota-08/BacklightKit/actions/workflows/ci.yml)
+[![Release](https://github.com/totota-08/BacklightKit/actions/workflows/release.yml/badge.svg)](https://github.com/totota-08/BacklightKit/actions/workflows/release.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey.svg)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -16,7 +16,7 @@
 
 ---
 
-macOS never shipped a public API for the keyboard backlight. `kbdlight` wraps Apple's
+macOS never shipped a public API for the keyboard backlight. **BacklightKit** wraps Apple's
 **private** `CoreBrightness` framework in a small, well-documented Swift package so you can
 read the brightness, set it, watch its real light output in nits, and script light effects —
 with **no `sudo`, no entitlements, and no SIP changes**.
@@ -24,12 +24,15 @@ with **no `sudo`, no entitlements, and no SIP changes**.
 Zero dependencies. One binary. Works on Apple Silicon and Intel Macs with a backlit keyboard.
 
 ```console
-$ kbdlight info
+$ backlit info
 keyboard 95158913 (built-in)
   brightness       : 0.3610  (0.0–1.0)
   light output     : 5.36 nits
-  ambient available: true
+  auto supported   : true
   auto brightness  : true
+  saturated        : false
+  suppressed       : false
+  dimmed (idle)    : false
   idle dim time    : 0.00 s
 ```
 
@@ -54,51 +57,51 @@ keyboard 95158913 (built-in)
 ### Homebrew
 
 ```sh
-brew install totota-08/tap/kbdlight
+brew install totota-08/tap/backlit
 ```
 
 ### Swift Package Manager (library)
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/totota-08/kbdlight", from: "0.2.0")
+    .package(url: "https://github.com/totota-08/BacklightKit", from: "0.3.0")
 ]
 ```
 ```swift
 .target(name: "YourApp", dependencies: [
-    .product(name: "MacKeyboardBacklight", package: "kbdlight")
+    .product(name: "BacklightKit", package: "BacklightKit")
 ])
 ```
 
 ### From source
 
 ```sh
-git clone https://github.com/totota-08/kbdlight
-cd kbdlight
+git clone https://github.com/totota-08/BacklightKit
+cd BacklightKit
 make install          # builds -c release, copies the binary to /usr/local/bin
 ```
 
-Prebuilt binaries are attached to every [release](https://github.com/totota-08/kbdlight/releases).
+Prebuilt binaries are attached to every [release](https://github.com/totota-08/BacklightKit/releases).
 
 ## CLI reference
 
-Run `kbdlight help` any time. Every command targets the built-in keyboard by default; add
-`--keyboard <id>` (ids come from `kbdlight info`) to target another one. `fade`, `pulse`, and
+Run `backlit help` any time. Every command targets the built-in keyboard by default; add
+`--keyboard <id>` (ids come from `backlit info`) to target another one. `fade`, `pulse`, and
 `morse` restore the previous state on `Ctrl-C` / `SIGTERM`.
 
 ### `info`
 Print the full state of every backlight-capable keyboard.
 
 ```sh
-kbdlight info            # human-readable
-kbdlight info --json     # machine-readable
+backlit info            # human-readable
+backlit info --json     # machine-readable
 ```
 
 | Field | Meaning |
 |---|---|
 | `brightness` | Current level, `0.0`–`1.0` |
 | `light output` | Actual output in **nits** (Apple's calibration table), or `n/a` |
-| `ambient available` | Whether the keyboard has an ambient-light sensor |
+| `auto supported` | Whether the keyboard has an ambient-light sensor |
 | `auto brightness` | Whether auto-brightness is on |
 | `saturated` / `suppressed` / `dimmed` | Live status flags (`n/a` if unsupported) |
 | `idle dim time` | Seconds idle before dimming (`0` = never) |
@@ -107,30 +110,30 @@ kbdlight info --json     # machine-readable
 Print just the current brightness — handy in scripts.
 
 ```sh
-kbdlight get            # -> 0.3610
+backlit get            # -> 0.3610
 ```
 
 ### `set <0..1>`
 Set the brightness. `--fade` asks the system for a smooth ramp instead of an instant jump.
 
 ```sh
-kbdlight set 0.5
-kbdlight set 1 --fade
+backlit set 0.5
+backlit set 1 --fade
 ```
 
 ### `up` / `down` `[step]`
 Nudge brightness up/down. Default step `0.1`.
 
 ```sh
-kbdlight up             # +0.10
-kbdlight down 0.25      # -0.25
+backlit up             # +0.10
+backlit down 0.25      # -0.25
 ```
 
 ### `fade <0..1> [--duration SEC]`
 Smoothly ramp from the current level to a target. Default duration `0.6s`.
 
 ```sh
-kbdlight fade 1.0 --duration 2
+backlit fade 1.0 --duration 2
 ```
 
 ### `pulse [options]`
@@ -145,8 +148,8 @@ is disabled during the effect so the sensor won't fight it.
 | `--count <n>` | `0` | Number of breaths (`0` = forever) |
 
 ```sh
-kbdlight pulse --min 0.1 --max 0.8 --period 2
-kbdlight pulse --count 3
+backlit pulse --min 0.1 --max 0.8 --period 2
+backlit pulse --count 3
 ```
 
 ### `morse <text> [options]`
@@ -159,24 +162,41 @@ restores the previous state when done.
 | `--peak <0..1>` | `1.0` | Brightness of the "on" flashes |
 
 ```sh
-kbdlight morse SOS
-kbdlight morse "hello world" --unit 0.08 --peak 0.7
+backlit morse SOS
+backlit morse "hello world" --unit 0.08 --peak 0.7
 ```
 
 ### `auto <on|off>`
 Toggle ambient auto-brightness.
 
 ```sh
-kbdlight auto off       # manual control
-kbdlight auto on        # hand it back to the system
+backlit auto off       # manual control
+backlit auto on        # hand it back to the system
 ```
 
 ### `dim <seconds>`
 Set the idle-dim timeout. `0` disables idle dimming.
 
 ```sh
-kbdlight dim 5
-kbdlight dim 0
+backlit dim 5
+backlit dim 0
+```
+
+### `hold <command...>`
+Run a command with idle dimming **suspended**, then restore the previous state — without
+touching your configured `dim` timeout. Useful for keeping the keyboard lit through a task.
+
+```sh
+backlit hold sleep 300         # stay lit for 5 minutes, then restore
+backlit hold ./run-demo.sh     # lit for the demo's duration
+```
+
+### `watch`
+Print the brightness on every change. **Event-driven** where the OS supports it (the system
+pushes each change — no polling, no latency), falling back to polling otherwise. `Ctrl-C` to stop.
+
+```sh
+backlit watch                  # 0.5000, then a line per change
 ```
 
 ## Library
@@ -185,23 +205,26 @@ The subject you operate on is a `Keyboard`. `KeyboardBacklight()` discovers them
 convenience accessors to the default (built-in) one.
 
 ```swift
-import MacKeyboardBacklight
+import BacklightKit
 
 guard let kb = KeyboardBacklight() else { return }   // nil on unsupported hardware
+// …or, when you need to know WHY it failed:
+// let kb = try KeyboardBacklight.discover()         // throws a DiscoveryError
 
 // Subject-first: operate on a keyboard directly.
 kb.builtIn?.brightness = 1.0
 print(kb.defaultKeyboard.nits ?? -1)                 // physical output in nits (Double?)
 
-// Convenience: these forward to the default keyboard.
+// Convenience: every Keyboard property is forwarded to the default keyboard
+// (dynamic member lookup), so this just works:
 kb.brightness = 0.5
 print(kb.brightness)
 
-// Failure is observable — the property setter records it…
-kb.brightness = 0.5
-if let err = kb.defaultKeyboard.lastSetError { print("failed:", err) }
-// …or use the throwing form:
-try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .none / .slow / .fast
+// One error story: every write has a throwing method. The property setters are
+// fire-and-forget conveniences that ignore failure.
+try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
+try kb.setAutoBrightness(false)
+try kb.setIdleDimTime(30)
 
 // Scoped manual control: saves brightness + auto, disables auto, ALWAYS restores.
 try kb.withManualControl { board in
@@ -211,33 +234,53 @@ try kb.withManualControl { board in
     }
 }
 
+// The async variant lets you use Task.sleep instead of blocking a thread.
+try await kb.withManualControl { board in
+    try board.setBrightness(1)
+    try await Task.sleep(nanoseconds: 120_000_000)
+    try board.setBrightness(0)
+}
+
 // "Unsupported" is nil, never a fake 0.
 print(kb.isSuppressed ?? false, kb.defaultKeyboard.idleDimTime ?? 0)
 
-// Watch changes (polled) via an AsyncStream.
+// Watch changes via an AsyncStream. Event-driven where the OS supports it (the system
+// pushes each change — no polling), falling back to polling otherwise.
 Task {
     for await level in kb.defaultKeyboard.brightnessStream() {
         print("brightness →", level)
     }
 }
 
-// Every keyboard, not just the default.
+// Keep the keyboard lit through a task without changing the configured dim timeout;
+// the previous suspend state is always restored, even if the body throws.
+try kb.withIdleDimmingSuspended {
+    runLongPresentation()
+}
+
+// Every keyboard, not just the default. Keyboard is Identifiable + Hashable,
+// so kb.keyboards drops straight into SwiftUI's ForEach.
 for keyboard in kb.keyboards {
     print(keyboard.id, keyboard.isBuiltIn, keyboard.brightness)
 }
 ```
 
-**`Keyboard`** — `brightness` (get/set, `Double`), `setBrightness(_:fade:) throws`, `lastSetError`,
-`nits: Double?`, `autoBrightness`, `setAutoBrightness(_:)`, `isSaturated/isSuppressed/isDimmed: Bool?`,
-`idleDimTime: Double?`, `disableIdleDim()`, `withManualControl { }`, `brightnessStream(pollInterval:)`,
-`isBuiltIn`, `supportsAmbient`.
+**`Keyboard`** — `brightness` (get/set, `Double`), `setBrightness(_:fade:) throws`,
+`nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
+`isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?` (read-only),
+`setIdleDimTime(_:) throws`, `disableIdleDim() throws`,
+`isIdleDimmingSuspended: Bool?`, `setIdleDimmingSuspended(_:) throws`, `withIdleDimmingSuspended { }`,
+`withManualControl { }` (sync + async),
+`brightnessStream(pollInterval:preferPolling:)` (event-driven when available), `isBuiltIn`.
+`Identifiable`, `Hashable`, `Sendable`.
 
-**`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, plus forwarding convenience
-accessors. Types are `Double` throughout; unsupported readings are `Optional`.
+**`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
+(reasoned failures via `DiscoveryError`), plus dynamic-member forwarding of every `Keyboard`
+property. Types are `Double`/`TimeInterval` throughout; unsupported readings are `Optional`.
 
 ## Examples
 
-Runnable via SPM — they `import MacKeyboardBacklight`, so there's nothing to copy-paste:
+Runnable via SPM — they `import BacklightKit`, so there's nothing to copy-paste:
 
 ```sh
 swift run example-morse "HELLO WORLD" --unit 0.1   # blink a phrase in Morse
@@ -252,7 +295,7 @@ The built-in keyboard backlight is a single PWM-driven white light guide, expose
 IORegistry as an `AppleARMPWMDevice` named `kbd-backlight` (Apple Silicon). Userspace controls it
 through the private `KeyboardBrightnessClient` class in `CoreBrightness.framework`.
 
-`kbdlight` `dlopen`s that framework and calls the class through the Objective-C runtime, so it
+`backlit` `dlopen`s that framework and calls the class through the Objective-C runtime, so it
 links against **nothing private at build time**. Capabilities are probed with `responds(to:)` at
 startup, so "unsupported" surfaces as `nil` and `KeyboardBacklight()` returns `nil` on hardware
 where the core selectors are missing — no crashes, no fake zeros.
@@ -287,7 +330,7 @@ App Store apps.
 ## Contributing
 
 Issues and PRs welcome. CI builds and tests every PR on macOS; releases are cut automatically
-when the version in `Sources/kbdlight/main.swift` changes on `main`. Good first contributions:
+when the version in `Sources/backlit/main.swift` changes on `main`. Good first contributions:
 more verified hardware rows, additional CLI effects, and confirming behavior on Intel / Touch Bar Macs.
 
 ## License

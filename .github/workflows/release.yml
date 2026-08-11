@@ -24,7 +24,7 @@ jobs:
       - name: Read version from source
         id: v
         run: |
-          VERSION=$(grep -Eo 'let version = "[0-9]+\.[0-9]+\.[0-9]+"' Sources/kbdlight/main.swift \
+          VERSION=$(grep -Eo 'let version = "[0-9]+\.[0-9]+\.[0-9]+"' Sources/backlit/main.swift \
                     | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
           if [ -z "$VERSION" ]; then echo "could not parse version"; exit 1; fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -55,8 +55,8 @@ jobs:
         id: pkg
         run: |
           V=${{ steps.v.outputs.version }}
-          TAR="kbdlight-$V-macos-arm64.tar.gz"
-          tar -C .build/release -czf "$TAR" kbdlight
+          TAR="backlit-$V-macos-arm64.tar.gz"
+          tar -C .build/release -czf "$TAR" backlit
           SHA=$(shasum -a 256 "$TAR" | awk '{print $1}')
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
           echo "binsha=$SHA" >> "$GITHUB_OUTPUT"
@@ -100,8 +100,8 @@ jobs:
           V=${{ steps.v.outputs.version }}
           SRC_SHA=${{ steps.pkg.outputs.srcsha }}
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
-          cat > tap/Formula/kbdlight.rb <<EOF
-          class Kbdlight < Formula
+          cat > tap/Formula/backlit.rb <<EOF
+          class Backlit < Formula
             desc "Read & control the Mac's built-in keyboard backlight (CLI + Swift library)"
             homepage "https://github.com/${{ github.repository }}"
             url "https://github.com/${{ github.repository }}/archive/refs/tags/v$V.tar.gz"
@@ -111,17 +111,17 @@ jobs:
 
             def install
               system "swift", "build", "-c", "release", "--disable-sandbox"
-              bin.install ".build/release/kbdlight"
+              bin.install ".build/release/backlit"
             end
 
             test do
-              assert_match "$V", shell_output("#{bin}/kbdlight --version")
+              assert_match "$V", shell_output("#{bin}/backlit --version")
             end
           end
           EOF
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/kbdlight.rb
-          git commit -m "kbdlight $V" || echo "no changes"
+          git add Formula/backlit.rb
+          git commit -m "backlit $V" || echo "no changes"
           git push

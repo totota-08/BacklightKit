@@ -1,7 +1,95 @@
 # Changelog
 
 All notable changes to this project are documented here. Releases are cut automatically
-when the `version` in `Sources/kbdlight/main.swift` changes on `main`.
+when the `version` in `Sources/backlit/main.swift` changes on `main`.
+
+## 0.4.0
+
+New capabilities from surveying the private `CoreBrightness` surface — additive, no breaking changes.
+
+### Added
+- **Event-driven `brightnessStream`**: when the OS exposes its change-notification selector
+  (verified macOS 12+), the stream is now push-based — the system delivers each change, so
+  there's no polling and no latency. Falls back to polling where the selector is missing;
+  `preferPolling: true` forces the old path. The notification path uses a dedicated private
+  client so it never disturbs other registrations. (Signature discovered by runtime probing:
+  `registerNotificationForKeys:keyboardID:block:`, keys must be passed explicitly.)
+- **Idle-dim suspend** (`isIdleDimmingSuspended`, `setIdleDimmingSuspended(_:)`,
+  `withIdleDimmingSuspended { }`): pause idle dimming *without* changing the configured
+  `idleDimTime`, then restore the prior state — even on throw. Distinct from `disableIdleDim()`,
+  which permanently sets the timeout to 0.
+- CLI: **`hold <command...>`** (run a command with idle dimming suspended) and **`watch`**
+  (print brightness on every change, event-driven). `info` now shows the suspend state.
+
+### Investigated but deferred (intentionally not shipped)
+- **Ambient light in lux (`currentLux`) and hardware brightness ramps
+  (`rampToBrightness:withDuration:`)** live on the lower-level private `KeyboardBacklight`
+  driver class, which must be bound to an `IOHIDServiceClient` via `addHIDServiceClient:`.
+  Runtime testing on Apple Silicon showed that passing anything but the exact backlight/ALS
+  HID service **crashes inside Apple's private code**, and that crash cannot be prevented with
+  `responds(to:)` guards. Shipping it would break this library's "never crashes, degrades
+  gracefully" contract, so it's deferred until the HID binding can be made provably safe.
+  The smooth-ramp *effect* remains available through the safe high-level path via
+  `setBrightness(_:fade:)` (`.slow` / `.fast`).
+
+## 0.3.0
+
+API-quality pass and a rename. **Breaking** — the public surface was reshaped while
+still in 0.x; migration is mechanical (see below).
+
+### Renamed
+- **The project is now BacklightKit** (repo `totota-08/BacklightKit`): the Swift module
+  `MacKeyboardBacklight` → **`BacklightKit`**, the CLI `kbdlight` → **`backlit`**, and the
+  Homebrew formula → `totota-08/tap/backlit`. Class names (`KeyboardBacklight`, `Keyboard`)
+  are unchanged. GitHub redirects the old repo URL; update SPM dependencies to the new URL.
+
+### Changed (breaking)
+- **One error story**: every write now has a throwing method — `setAutoBrightness(_:)`
+  and `setIdleDimTime(_:)`/`disableIdleDim()` now `throw` instead of returning `Bool`.
+  The writable properties (`brightness`, `autoBrightness`) are documented fire-and-forget
+  conveniences. `lastSetError` is gone — use `setBrightness(_:fade:)` when you need the error.
+- **`Morse.pulses(for:)` returns `Morse.Encoding`** (a struct with `pulses` + `skipped`)
+  instead of a tuple, so fields can be added without breaking callers.
+- **`idleDimTime` is read-only** — `= nil` used to be a silent no-op trap. Change it with
+  `setIdleDimTime(_:)` / `disableIdleDim()`.
+- **`supportsAmbient` → `supportsAutoBrightness`** — one term for the feature everywhere
+  (`info` output and `--json` key renamed accordingly).
+- **`FadeSpeed.none` → `.instant`** — says what it does and can never collide with
+  `Optional.none` in inference contexts.
+- Time values are typed `TimeInterval` (still `Double` under the hood).
+
+### Added
+- **`KeyboardBacklight.discover() throws`** — like `init?()` but tells you *why* discovery
+  failed (`DiscoveryError`: framework missing / private API changed / no backlit keyboard).
+  The CLI now uses it, so `kbdlight` error messages name the actual cause.
+- **Dynamic member forwarding**: `KeyboardBacklight` forwards *every* `Keyboard` property
+  to `defaultKeyboard` via `@dynamicMemberLookup` — no more hand-maintained mirror that
+  could drift out of sync.
+- **`withManualControl` async overload** — use `Task.sleep` instead of blocking a thread.
+- `Keyboard` is now `Identifiable`, `Hashable`, `Equatable` (by `id`) and
+  `CustomStringConvertible` — `kb.keyboards` drops straight into SwiftUI's `ForEach`.
+- `Keyboard` is `Sendable` for real now (no mutable state at all).
+
+### Changed
+- The CLI's `pulse` and `morse` are rebuilt on `withManualControl` (the library's own
+  restore machinery) instead of hand-rolling save/restore.
+
+### Fixed (from independent API review)
+- **`brightnessStream` no longer dies silently**: the polling task now retains the
+  keyboard, so `discover()?.defaultKeyboard.brightnessStream()` works without keeping your
+  own reference (it previously ended the stream immediately). Negative/zero `pollInterval`
+  is clamped instead of trapping. Docs now state the stream emits the current value first.
+- **`KeyboardBacklight` is `Sendable`** — usable under Swift 6 strict concurrency.
+- **Method forwarding is symmetric**: `setAutoBrightness`, `setIdleDimTime`,
+  `disableIdleDim`, and `brightnessStream` are forwarded to `defaultKeyboard` too, so the
+  rule is simply "everything on `Keyboard` also works on `KeyboardBacklight`".
+- **Errors conform to `LocalizedError`** — `error.localizedDescription` shows the real
+  message instead of a generic NSError bridge string.
+- `Morse.Encoding` gained `totalUnits` / `duration(unit:)`, so holders of an encoding
+  don't re-encode just to get the playback time (the CLI did exactly that).
+- CLI: negative `--unit` / `--duration` / `--period` values are clamped instead of
+  trapping at runtime; docs note that enum cases may grow (use `default` in switches),
+  that `withManualControl` is not reentrant, and that restore is best-effort.
 
 ## 0.2.1
 

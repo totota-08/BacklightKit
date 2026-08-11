@@ -2,32 +2,32 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacKeyboardBacklight",
+    name: "BacklightKit",
     platforms: [.macOS(.v12)],
     products: [
-        .library(name: "MacKeyboardBacklight", targets: ["MacKeyboardBacklight"]),
-        .executable(name: "kbdlight", targets: ["kbdlight"]),
+        .library(name: "BacklightKit", targets: ["BacklightKit"]),
+        .executable(name: "backlit", targets: ["backlit"]),
     ],
     targets: [
-        .target(name: "MacKeyboardBacklight"),
+        .target(name: "BacklightKit"),
         .executableTarget(
-            name: "kbdlight",
-            dependencies: ["MacKeyboardBacklight"]
+            name: "backlit",
+            dependencies: ["BacklightKit"]
         ),
         // Examples — run with `swift run example-morse SOS` / `swift run example-typeglow`.
         .executableTarget(
             name: "example-morse",
-            dependencies: ["MacKeyboardBacklight"],
+            dependencies: ["BacklightKit"],
             path: "examples/morse"
         ),
         .executableTarget(
             name: "example-typeglow",
-            dependencies: ["MacKeyboardBacklight"],
+            dependencies: ["BacklightKit"],
             path: "examples/typeglow"
         ),
         .testTarget(
-            name: "MacKeyboardBacklightTests",
-            dependencies: ["MacKeyboardBacklight"]
+            name: "BacklightKitTests",
+            dependencies: ["BacklightKit"]
         ),
     ]
 )

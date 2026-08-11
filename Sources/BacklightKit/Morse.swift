@@ -27,13 +27,26 @@ public enum Morse {
         public var isOn: Bool { if case .on = self { return true } else { return false } }
     }
 
-    /// Turn text into a flat pulse list with all gaps made explicit, plus the set of
-    /// characters that had no Morse mapping (skipped rather than silently swallowed).
+    /// The result of encoding text: the pulse list, plus any characters that had no
+    /// Morse mapping (skipped rather than silently swallowed).
+    public struct Encoding: Equatable, Sendable {
+        /// Flat pulse list with all gaps made explicit.
+        public let pulses: [Pulse]
+        /// Characters that had no Morse mapping, in input order.
+        public let skipped: [Character]
+
+        /// Total length of the encoding in Morse units.
+        public var totalUnits: Int { pulses.reduce(0) { $0 + $1.units } }
+        /// Total playback time at a given unit length (seconds).
+        public func duration(unit: TimeInterval) -> TimeInterval { Double(totalUnits) * unit }
+    }
+
+    /// Encode text into pulses.
     ///
     /// Splitting on whitespace first means leading, trailing, and repeated spaces can't
     /// leave a stray 7-unit gap on the ends or double up between words: gaps exist only
     /// *between* non-empty words. The output never begins or ends on an `.off` pulse.
-    public static func pulses(for text: String) -> (pulses: [Pulse], skipped: [Character]) {
+    public static func pulses(for text: String) -> Encoding {
         var skipped: [Character] = []
 
         // Encode one word (no spaces) into its pulses; unknown characters are collected.
@@ -52,7 +65,7 @@ public enum Morse {
             return out
         }
 
-        let words = text.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" })
+        let words = text.split(whereSeparator: \.isWhitespace)
         var out: [Pulse] = []
         for word in words {
             let pulses = encodeWord(word)
@@ -60,11 +73,12 @@ public enum Morse {
             if !out.isEmpty { out.append(.off(units: 7)) }            // gap between words, only in the middle
             out.append(contentsOf: pulses)
         }
-        return (out, skipped)
+        return Encoding(pulses: out, skipped: skipped)
     }
 
     /// Total playback time for `text` at a given unit length (seconds).
-    public static func duration(for text: String, unit: Double) -> Double {
-        Double(pulses(for: text).pulses.reduce(0) { $0 + $1.units }) * unit
+    /// If you already hold an `Encoding`, use its `duration(unit:)` instead of re-encoding.
+    public static func duration(for text: String, unit: TimeInterval) -> TimeInterval {
+        pulses(for: text).duration(unit: unit)
     }
 }

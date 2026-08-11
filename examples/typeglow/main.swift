@@ -1,5 +1,5 @@
 import Foundation
-import MacKeyboardBacklight
+import BacklightKit
 
 // Type-to-glow: the backlight flares on every keystroke and decays when you stop.
 //   swift run example-typeglow      ('q' or Ctrl-C to quit)
@@ -18,7 +18,7 @@ let board = kb.defaultKeyboard
 
 let savedBrightness = board.brightness
 let savedAuto = board.autoBrightness
-board.setAutoBrightness(false)
+try? board.setAutoBrightness(false)
 
 let lock = NSLock()
 var glow = 0.0
@@ -27,7 +27,7 @@ var stopped = false
 func restore() {
     lock.lock(); if stopped { lock.unlock(); return }; stopped = true; lock.unlock()
     try? board.setBrightness(savedBrightness)
-    board.setAutoBrightness(savedAuto)
+    try? board.setAutoBrightness(savedAuto)
 }
 atexit { restore() }   // backstop for any normal exit() path
 
