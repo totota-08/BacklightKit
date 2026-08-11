@@ -1,12 +1,18 @@
 # Changelog
 
 All notable changes to this project are documented here. Releases are cut automatically
-when the `version` in `Sources/kbdlight/main.swift` changes on `main`.
+when the `version` in `Sources/backlit/main.swift` changes on `main`.
 
 ## 0.3.0
 
-API-quality pass. **Breaking** — the public surface was reshaped while still in 0.x;
-migration is mechanical (see below).
+API-quality pass and a rename. **Breaking** — the public surface was reshaped while
+still in 0.x; migration is mechanical (see below).
+
+### Renamed
+- **The project is now BacklightKit** (repo `totota-08/BacklightKit`): the Swift module
+  `MacKeyboardBacklight` → **`BacklightKit`**, the CLI `kbdlight` → **`backlit`**, and the
+  Homebrew formula → `totota-08/tap/backlit`. Class names (`KeyboardBacklight`, `Keyboard`)
+  are unchanged. GitHub redirects the old repo URL; update SPM dependencies to the new URL.
 
 ### Changed (breaking)
 - **One error story**: every write now has a throwing method — `setAutoBrightness(_:)`

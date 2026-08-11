@@ -1,5 +1,5 @@
 PREFIX ?= /usr/local
-BIN := .build/release/kbdlight
+BIN := .build/release/backlit
 
 .PHONY: build release install uninstall clean test
 
@@ -11,11 +11,11 @@ release:
 
 install: release
 	install -d $(PREFIX)/bin
-	install $(BIN) $(PREFIX)/bin/kbdlight
-	@echo "installed to $(PREFIX)/bin/kbdlight"
+	install $(BIN) $(PREFIX)/bin/backlit
+	@echo "installed to $(PREFIX)/bin/backlit"
 
 uninstall:
-	rm -f $(PREFIX)/bin/kbdlight
+	rm -f $(PREFIX)/bin/backlit
 
 test:
 	swift test

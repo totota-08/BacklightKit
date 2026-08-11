@@ -1,5 +1,5 @@
 import XCTest
-@testable import MacKeyboardBacklight
+@testable import BacklightKit
 
 // The private-API layer can't run in CI, but the pure logic (Morse encoding/timing)
 // is fully testable. This is where the "abstract the selector layer for tests" point pays off.

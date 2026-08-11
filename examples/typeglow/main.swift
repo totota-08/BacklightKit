@@ -1,5 +1,5 @@
 import Foundation
-import MacKeyboardBacklight
+import BacklightKit
 
 // Type-to-glow: the backlight flares on every keystroke and decays when you stop.
 //   swift run example-typeglow      ('q' or Ctrl-C to quit)

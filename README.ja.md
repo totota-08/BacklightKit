@@ -1,11 +1,11 @@
 <div align="center">
 
-# kbdlight ⌨️💡
+# BacklightKit ⌨️💡
 
-**Mac の内蔵キーボードバックライトを、Swift からもシェルからも読み書きする。**
+**Mac の内蔵キーボードバックライトを、Swift（`BacklightKit`）からもシェル（`backlit`）からも読み書きする。**
 
-[![CI](https://github.com/totota-08/kbdlight/actions/workflows/ci.yml/badge.svg)](https://github.com/totota-08/kbdlight/actions/workflows/ci.yml)
-[![Release](https://github.com/totota-08/kbdlight/actions/workflows/release.yml/badge.svg)](https://github.com/totota-08/kbdlight/actions/workflows/release.yml)
+[![CI](https://github.com/totota-08/BacklightKit/actions/workflows/ci.yml/badge.svg)](https://github.com/totota-08/BacklightKit/actions/workflows/ci.yml)
+[![Release](https://github.com/totota-08/BacklightKit/actions/workflows/release.yml/badge.svg)](https://github.com/totota-08/BacklightKit/actions/workflows/release.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey.svg)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -16,7 +16,7 @@
 
 ---
 
-macOS はキーボードバックライトの公開 API を一度も用意していません。`kbdlight` は Apple の
+macOS はキーボードバックライトの公開 API を一度も用意していません。**BacklightKit** は Apple の
 **非公開** `CoreBrightness` フレームワークを小さなライブラリに包み、明るさの読み書き、実際の
 光量（nits）の取得、点滅エフェクトのスクリプト化を可能にします。しかも
 **`sudo` 不要・entitlements 不要・SIP 変更も不要**。
@@ -24,11 +24,11 @@ macOS はキーボードバックライトの公開 API を一度も用意して
 依存ゼロ。バイナリ 1 つ。バックライト付きキーボードを持つ Apple Silicon / Intel Mac で動作します。
 
 ```console
-$ kbdlight info
+$ backlit info
 keyboard 95158913 (built-in)
   brightness       : 0.3610  (0.0–1.0)
   light output     : 5.36 nits
-  ambient available: true
+  auto supported   : true
   auto brightness  : true
   idle dim time    : 0.00 s
 ```
@@ -54,51 +54,51 @@ keyboard 95158913 (built-in)
 ### Homebrew
 
 ```sh
-brew install totota-08/tap/kbdlight
+brew install totota-08/tap/backlit
 ```
 
 ### Swift Package Manager（ライブラリ）
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/totota-08/kbdlight", from: "0.2.0")
+    .package(url: "https://github.com/totota-08/BacklightKit", from: "0.3.0")
 ]
 ```
 ```swift
 .target(name: "YourApp", dependencies: [
-    .product(name: "MacKeyboardBacklight", package: "kbdlight")
+    .product(name: "BacklightKit", package: "BacklightKit")
 ])
 ```
 
 ### ソースから
 
 ```sh
-git clone https://github.com/totota-08/kbdlight
-cd kbdlight
+git clone https://github.com/totota-08/BacklightKit
+cd BacklightKit
 make install          # release ビルドして /usr/local/bin に配置
 ```
 
-各 [リリース](https://github.com/totota-08/kbdlight/releases) にビルド済みバイナリが添付されます。
+各 [リリース](https://github.com/totota-08/BacklightKit/releases) にビルド済みバイナリが添付されます。
 
 ## CLI コマンド一覧
 
-いつでも `kbdlight help`。各コマンドは既定で内蔵キーボードを対象にします。`--keyboard <id>`
-（idは `kbdlight info` で確認）で別のキーボードを指定できます。`fade` / `pulse` / `morse` は
+いつでも `backlit help`。各コマンドは既定で内蔵キーボードを対象にします。`--keyboard <id>`
+（idは `backlit info` で確認）で別のキーボードを指定できます。`fade` / `pulse` / `morse` は
 `Ctrl-C` / `SIGTERM` で元の状態に復元します。
 
 ### `info`
 バックライト対応キーボードすべての状態を表示。
 
 ```sh
-kbdlight info            # 人が読む形式
-kbdlight info --json     # JSON
+backlit info            # 人が読む形式
+backlit info --json     # JSON
 ```
 
 | 項目 | 意味 |
 |---|---|
 | `brightness` | 現在の明るさ `0.0`–`1.0` |
 | `light output` | 実際の光量（**nits**）。非対応なら `n/a` |
-| `ambient available` | 環境光センサーを持つか |
+| `auto supported` | 環境光センサーを持つか |
 | `auto brightness` | 自動調光が ON か |
 | `saturated` / `suppressed` / `dimmed` | ライブの状態フラグ（非対応は `n/a`） |
 | `idle dim time` | 放置で暗くなるまでの秒数（`0` = 暗くならない） |
@@ -107,30 +107,30 @@ kbdlight info --json     # JSON
 現在の明るさだけを出力。スクリプト向け。
 
 ```sh
-kbdlight get            # -> 0.3610
+backlit get            # -> 0.3610
 ```
 
 ### `set <0..1>`
 明るさを設定。`--fade` で即時ではなく滑らかに変化。
 
 ```sh
-kbdlight set 0.5
-kbdlight set 1 --fade
+backlit set 0.5
+backlit set 1 --fade
 ```
 
 ### `up` / `down` `[step]`
 明るさを上げ下げ。刻み幅の既定は `0.1`。
 
 ```sh
-kbdlight up             # +0.10
-kbdlight down 0.25      # -0.25
+backlit up             # +0.10
+backlit down 0.25      # -0.25
 ```
 
 ### `fade <0..1> [--duration SEC]`
 現在値から目標値へ滑らかに変化。既定 `0.6` 秒。
 
 ```sh
-kbdlight fade 1.0 --duration 2
+backlit fade 1.0 --duration 2
 ```
 
 ### `pulse [オプション]`
@@ -144,8 +144,8 @@ kbdlight fade 1.0 --duration 2
 | `--count <n>` | `0` | 呼吸の回数（`0` = 無限） |
 
 ```sh
-kbdlight pulse --min 0.1 --max 0.8 --period 2
-kbdlight pulse --count 3
+backlit pulse --min 0.1 --max 0.8 --period 2
+backlit pulse --count 3
 ```
 
 ### `morse <text> [オプション]`
@@ -157,24 +157,24 @@ kbdlight pulse --count 3
 | `--peak <0..1>` | `1.0` | 点灯フラッシュの明るさ |
 
 ```sh
-kbdlight morse SOS
-kbdlight morse "hello world" --unit 0.08 --peak 0.7
+backlit morse SOS
+backlit morse "hello world" --unit 0.08 --peak 0.7
 ```
 
 ### `auto <on|off>`
 環境光による自動調光を切り替え。
 
 ```sh
-kbdlight auto off       # 手動制御
-kbdlight auto on        # システムに戻す
+backlit auto off       # 手動制御
+backlit auto on        # システムに戻す
 ```
 
 ### `dim <seconds>`
 放置で暗くなるまでの秒数。`0` で無効。
 
 ```sh
-kbdlight dim 5
-kbdlight dim 0
+backlit dim 5
+backlit dim 0
 ```
 
 ## ライブラリ
@@ -183,7 +183,7 @@ kbdlight dim 0
 デフォルト（内蔵）キーボードへ委譲します。
 
 ```swift
-import MacKeyboardBacklight
+import BacklightKit
 
 guard let kb = KeyboardBacklight() else { return }   // 非対応機なら nil
 // …失敗の「理由」が必要なら:
@@ -247,7 +247,7 @@ for keyboard in kb.keyboards {
 
 ## サンプル
 
-SPM で実行できます。`import MacKeyboardBacklight` しているのでコピペ不要:
+SPM で実行できます。`import BacklightKit` しているのでコピペ不要:
 
 ```sh
 swift run example-morse "HELLO WORLD" --unit 0.1   # フレーズをモールスで点滅
@@ -262,7 +262,7 @@ swift run example-typeglow                         # 打鍵で光る。'q' で�
 IORegistry に `kbd-backlight` という `AppleARMPWMDevice` として現れます。ユーザー空間からは
 `CoreBrightness.framework` 内の非公開クラス `KeyboardBrightnessClient` 経由で制御します。
 
-`kbdlight` はそのフレームワークを `dlopen` し、Objective-C ランタイム越しに呼ぶため、
+`backlit` はそのフレームワークを `dlopen` し、Objective-C ランタイム越しに呼ぶため、
 **ビルド時に非公開シンボルへ一切リンクしません**。起動時に `responds(to:)` で機能を判定するので、
 「非対応」は `nil` として表面化し、コアのセレクタが無い機種では `KeyboardBacklight()` が `nil` を
 返します —— クラッシュも偽のゼロもありません。
@@ -295,7 +295,7 @@ IORegistry に `kbd-backlight` という `AppleARMPWMDevice` として現れま�
 
 ## コントリビュート
 
-Issue / PR 歓迎。CI が全 PR を macOS でビルド＆テストし、`Sources/kbdlight/main.swift` の
+Issue / PR 歓迎。CI が全 PR を macOS でビルド＆テストし、`Sources/backlit/main.swift` の
 バージョンが `main` で変わると自動でリリースされます。最初の一歩に良いもの: 動作確認済み機種の
 追加、CLI エフェクトの追加、Intel / Touch Bar 機での挙動確認。
 

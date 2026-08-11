@@ -1,5 +1,5 @@
 import Foundation
-import MacKeyboardBacklight
+import BacklightKit
 
 // Blink a word in Morse code on the keyboard backlight.
 //   swift run example-morse "HELLO WORLD" --unit 0.13 --peak 1.0

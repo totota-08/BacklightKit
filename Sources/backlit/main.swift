@@ -1,20 +1,20 @@
 import Foundation
-import MacKeyboardBacklight
+import BacklightKit
 
 // Single source of truth for the version. Bumping this on `main` is what drives the
 // Release workflow to tag + publish — the git tag is derived from here, never hand-synced.
 let version = "0.3.0"
 
 func die(_ msg: String) -> Never {
-    FileHandle.standardError.write(Data("kbdlight: \(msg)\n".utf8)); exit(1)
+    FileHandle.standardError.write(Data("backlit: \(msg)\n".utf8)); exit(1)
 }
 
 func usage() {
     print("""
-    kbdlight \(version) — control the Mac's built-in keyboard backlight
+    backlit \(version) — control the Mac's built-in keyboard backlight
 
     USAGE:
-      kbdlight <command> [args] [--keyboard <id>]
+      backlit <command> [args] [--keyboard <id>]
 
     COMMANDS:
       info                 Show everything about every keyboard (add --json for JSON)
@@ -76,7 +76,7 @@ let opts = parse(Array(argv.dropFirst()))
 func targetKeyboard() -> Keyboard {
     guard let idStr = opts.value("--keyboard") else { return kb.defaultKeyboard }
     guard let id = UInt64(idStr), let k = kb.keyboards.first(where: { $0.id == id }) else {
-        die("no keyboard with id \(idStr) — run `kbdlight info` for ids")
+        die("no keyboard with id \(idStr) — run `backlit info` for ids")
     }
     return k
 }
@@ -115,7 +115,7 @@ case "get":
     print(String(format: "%.4f", board.brightness))
 
 case "set":
-    guard let s = opts.first, let v = Double(s) else { die("usage: kbdlight set <0..1> [--fade]") }
+    guard let s = opts.first, let v = Double(s) else { die("usage: backlit set <0..1> [--fade]") }
     do { try board.setBrightness(clamp(v), fade: opts.has("--fade") ? .slow : .instant) }
     catch { die("\(error)") }
 
@@ -126,15 +126,15 @@ case "up", "down":
     print(String(format: "%.4f", target))
 
 case "auto":
-    guard let mode = opts.first, mode == "on" || mode == "off" else { die("usage: kbdlight auto <on|off>") }
+    guard let mode = opts.first, mode == "on" || mode == "off" else { die("usage: backlit auto <on|off>") }
     do { try board.setAutoBrightness(mode == "on") } catch { die("\(error)") }
 
 case "dim":
-    guard let s = opts.first, let v = Double(s) else { die("usage: kbdlight dim <seconds>") }
+    guard let s = opts.first, let v = Double(s) else { die("usage: backlit dim <seconds>") }
     do { try board.setIdleDimTime(v) } catch { die("\(error)") }
 
 case "fade":
-    guard let s = opts.first, let target = Double(s) else { die("usage: kbdlight fade <0..1> [--duration SEC]") }
+    guard let s = opts.first, let target = Double(s) else { die("usage: backlit fade <0..1> [--duration SEC]") }
     let dur = Double(opts.value("--duration") ?? "") ?? 0.6
     let start = board.brightness
     restoreOnInterrupt(brightness: start, auto: board.autoBrightness)   // Ctrl-C → back to start
@@ -162,7 +162,7 @@ case "pulse":
     }
 
 case "morse":
-    guard let text = opts.first else { die("usage: kbdlight morse <text> [--unit SEC] [--peak 0..1]") }
+    guard let text = opts.first else { die("usage: backlit morse <text> [--unit SEC] [--peak 0..1]") }
     let unit = Double(opts.value("--unit") ?? "") ?? 0.13
     let peak = clamp(Double(opts.value("--peak") ?? "") ?? 1.0)
     let encoding = Morse.pulses(for: text)
@@ -200,5 +200,5 @@ case "info":
     }
 
 default:
-    die("unknown command '\(cmd)' — try 'kbdlight help'")
+    die("unknown command '\(cmd)' — try 'backlit help'")
 }
