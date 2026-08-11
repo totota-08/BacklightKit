@@ -4,7 +4,7 @@ import Foundation
 //: Blink your Mac's **built-in keyboard backlight** to spell a word in Morse code.
 //: Change `word` below and re-run. Watch the keyboard, not the screen.
 
-let word = "HELLO"          // ← 好きな単語に変えて再実行
+let word = "HELLO WORLD"          // ← 好きな単語に変えて再実行
 let unit  = 0.13            // モールスの1単位（秒）。小さいほど速い
 
 // ---------------------------------------------------------------------------
