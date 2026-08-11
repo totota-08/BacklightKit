@@ -29,9 +29,13 @@ public enum FadeSpeed: Sendable {
 /// A single backlight-capable keyboard. **This is the thing you operate on** —
 /// `keyboard.brightness = 0.5`, `keyboard.setBrightness(1, fade: .slow)`, etc.
 ///
-/// Not internally synchronized. Treat one instance as owned by a single thread/task
-/// (the main actor is a fine choice). `brightnessStream` reads on a background task and
-/// is the one intentional exception.
+/// Concurrency: reads (`brightness`, `nits`, the status flags) are stateless calls into the
+/// system and are safe to make from any thread — which is why `brightnessStream` can poll on a
+/// background task. The only mutable field is `lastSetError`, written by the `brightness`
+/// **setter**; do all *writes* from a single thread/task (the main actor is a fine choice).
+/// The `@unchecked Sendable` conformance exists so an instance can be handed to that polling
+/// task; it is a promise about the read path, not a claim of full write serialization. Under
+/// Swift 6 strict concurrency, confine writes to one isolation domain.
 public final class Keyboard: @unchecked Sendable {
 
     /// Opaque backlight identifier used by the private API.

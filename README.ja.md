@@ -82,7 +82,9 @@ make install          # release ビルドして /usr/local/bin に配置
 
 ## CLI コマンド一覧
 
-いつでも `kbdlight help`。各コマンドはデフォルトで内蔵キーボードを対象にします。
+いつでも `kbdlight help`。各コマンドは既定で内蔵キーボードを対象にします。`--keyboard <id>`
+（idは `kbdlight info` で確認）で別のキーボードを指定できます。`fade` / `pulse` / `morse` は
+`Ctrl-C` / `SIGTERM` で元の状態に復元します。
 
 ### `info`
 バックライト対応キーボードすべての状態を表示。

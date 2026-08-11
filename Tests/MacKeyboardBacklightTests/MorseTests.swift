@@ -35,6 +35,28 @@ final class MorseTests: XCTestCase {
         XCTAssertTrue(pulses.last?.isOn ?? false)
     }
 
+    func testTrailingAndLeadingSpacesProduceNoEdgeGaps() {
+        let (bare, _) = Morse.pulses(for: "SOS")
+        for variant in ["SOS ", " SOS", "  SOS  ", "\tSOS\n"] {
+            let (p, _) = Morse.pulses(for: variant)
+            XCTAssertEqual(p, bare, "‘\(variant)’ should encode identically to ‘SOS’")
+            XCTAssertTrue(p.first?.isOn ?? false)
+            XCTAssertTrue(p.last?.isOn ?? false)
+        }
+    }
+
+    func testConsecutiveSpacesAreASingleWordGap() {
+        // "A  B" (two spaces) must still be exactly one 7-unit word gap, not 14.
+        let single = Morse.pulses(for: "A B").pulses
+        let double = Morse.pulses(for: "A  B").pulses
+        XCTAssertEqual(single, double)
+        XCTAssertEqual(single.filter { $0 == .off(units: 7) }.count, 1)
+    }
+
+    func testWhitespaceOnlyInputIsEmpty() {
+        XCTAssertTrue(Morse.pulses(for: "   ").pulses.isEmpty)
+    }
+
     func testDurationMatchesUnitSum() {
         let unit = 0.1
         let (pulses, _) = Morse.pulses(for: "SOS")

@@ -29,25 +29,36 @@ public enum Morse {
 
     /// Turn text into a flat pulse list with all gaps made explicit, plus the set of
     /// characters that had no Morse mapping (skipped rather than silently swallowed).
+    ///
+    /// Splitting on whitespace first means leading, trailing, and repeated spaces can't
+    /// leave a stray 7-unit gap on the ends or double up between words: gaps exist only
+    /// *between* non-empty words. The output never begins or ends on an `.off` pulse.
     public static func pulses(for text: String) -> (pulses: [Pulse], skipped: [Character]) {
-        var out: [Pulse] = []
         var skipped: [Character] = []
-        let letters = Array(text.uppercased())
 
-        var firstLetterEmitted = false
-        for ch in letters {
-            if ch == " " {
-                if !out.isEmpty { out.append(.off(units: 7)) }   // word gap
-                firstLetterEmitted = false
-                continue
+        // Encode one word (no spaces) into its pulses; unknown characters are collected.
+        func encodeWord(_ word: Substring) -> [Pulse] {
+            var out: [Pulse] = []
+            var firstLetterEmitted = false
+            for ch in word.uppercased() {
+                guard let code = table[ch] else { skipped.append(ch); continue }
+                if firstLetterEmitted { out.append(.off(units: 3)) }  // gap between letters
+                firstLetterEmitted = true
+                for (i, symbol) in code.enumerated() {
+                    if i > 0 { out.append(.off(units: 1)) }           // gap between symbols
+                    out.append(.on(units: symbol == "-" ? 3 : 1))     // dash / dot
+                }
             }
-            guard let code = table[ch] else { skipped.append(ch); continue }
-            if firstLetterEmitted { out.append(.off(units: 3)) } // letter gap
-            firstLetterEmitted = true
-            for (i, symbol) in code.enumerated() {
-                if i > 0 { out.append(.off(units: 1)) }          // symbol gap
-                out.append(.on(units: symbol == "-" ? 3 : 1))    // dash / dot
-            }
+            return out
+        }
+
+        let words = text.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" })
+        var out: [Pulse] = []
+        for word in words {
+            let pulses = encodeWord(word)
+            guard !pulses.isEmpty else { continue }                   // skip whitespace-only / all-unknown
+            if !out.isEmpty { out.append(.off(units: 7)) }            // gap between words, only in the middle
+            out.append(contentsOf: pulses)
         }
         return (out, skipped)
     }

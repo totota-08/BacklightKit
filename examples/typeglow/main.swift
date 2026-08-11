@@ -4,9 +4,12 @@ import MacKeyboardBacklight
 // Type-to-glow: the backlight flares on every keystroke and decays when you stop.
 //   swift run example-typeglow      ('q' or Ctrl-C to quit)
 //
-// Uses the library (guards + restore live there). Restore is wired to normal exit,
-// to Ctrl-C (raw mode delivers it as a byte), and to atexit as a backstop, so the
-// backlight never gets stranded off.
+// Uses the library (guards + restore live there). Restore is wired to:
+//   • normal exit and `q`,
+//   • Ctrl-C (raw mode delivers it as a byte, not a signal),
+//   • SIGTERM (a catchable `kill`), and
+//   • atexit, which fires on any normal `exit()` return path.
+// Only SIGKILL (`kill -9`) can't be caught — nothing in userspace can restore after that.
 
 guard let kb = KeyboardBacklight() else {
     FileHandle.standardError.write(Data("no keyboard backlight on this Mac\n".utf8)); exit(1)
@@ -26,7 +29,13 @@ func restore() {
     try? board.setBrightness(savedBrightness)
     board.setAutoBrightness(savedAuto)
 }
-atexit { restore() }   // backstop: fires even on unexpected exit paths
+atexit { restore() }   // backstop for any normal exit() path
+
+// Catch SIGTERM (`kill`) so the backlight is restored before we go.
+signal(SIGTERM, SIG_IGN)
+let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
+termSource.setEventHandler { restore(); exit(0) }
+termSource.resume()
 
 // Decay loop: every 25ms, ease `glow` toward 0 and push it to the backlight.
 DispatchQueue.global().async {
