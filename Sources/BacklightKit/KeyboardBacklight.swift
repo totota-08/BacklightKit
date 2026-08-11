@@ -3,7 +3,10 @@ import Foundation
 // MARK: - Errors & options
 
 /// Errors thrown by the writable parts of the API.
-public enum KeyboardBacklightError: Error, CustomStringConvertible {
+///
+/// May gain cases in future versions (this wraps a private API whose failure modes can
+/// grow) — include a `default` when switching exhaustively.
+public enum KeyboardBacklightError: Error, CustomStringConvertible, LocalizedError {
     /// The underlying private call returned `false` (the system rejected the change).
     case setFailed
     /// The private selector this feature needs is not available on this OS/hardware.
@@ -15,11 +18,15 @@ public enum KeyboardBacklightError: Error, CustomStringConvertible {
         case .unsupported(let s): return "unsupported on this Mac: \(s)"
         }
     }
+    public var errorDescription: String? { description }
 }
 
 /// Why `KeyboardBacklight.discover()` failed. `init?()` collapses these to `nil`;
 /// use `discover()` when you need to tell a user (or a bug report) *why*.
-public enum DiscoveryError: Error, CustomStringConvertible {
+///
+/// May gain cases in future versions (Apple's private API can grow new failure modes) —
+/// include a `default` when switching exhaustively.
+public enum DiscoveryError: Error, CustomStringConvertible, LocalizedError {
     /// The private CoreBrightness framework could not be loaded.
     case frameworkUnavailable
     /// `KeyboardBrightnessClient` no longer exists (private API changed).
@@ -38,6 +45,7 @@ public enum DiscoveryError: Error, CustomStringConvertible {
         case .noBacklitKeyboards: return "no backlight-capable keyboard present"
         }
     }
+    public var errorDescription: String? { description }
 }
 
 /// How a brightness change is applied. `.instant` applies immediately (good for hard
@@ -139,6 +147,7 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
     /// Whether ambient auto-brightness is currently enabled. The setter is a convenience
     /// that ignores failure; call `setAutoBrightness(_:)` when you need the error.
     /// See `supportsAutoBrightness` for whether the keyboard has the feature at all.
+    /// (If the OS is missing the underlying getter entirely, this reads as `false`.)
     public var autoBrightness: Bool {
         get { boolCall("isAutoBrightnessEnabledForKeyboard:") }
         set { try? setAutoBrightness(newValue) }
@@ -188,8 +197,12 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
     // MARK: Scoped manual control
 
     /// Run `body` with manual control: saves the current brightness + auto-brightness,
-    /// disables auto so the ambient sensor won't fight you, and **always restores both**
-    /// when the block exits — normally or by throwing.
+    /// disables auto so the ambient sensor won't fight you, and **always attempts to
+    /// restore both** when the block exits — normally or by throwing (restore failures
+    /// are swallowed; there is nowhere left to report them).
+    ///
+    /// Not reentrant: two overlapping `withManualControl` blocks on the same keyboard
+    /// would save/restore each other's state — run them one at a time.
     ///
     /// ```swift
     /// try keyboard.withManualControl { kb in
@@ -233,18 +246,21 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
 
     // MARK: Change monitoring
 
-    /// Emits the brightness whenever it changes, by polling every `pollInterval` seconds.
-    /// (Apple's private change-notification selector exists but has an undocumented block
-    /// signature; polling is the stable path.) The stream stops when its task is cancelled.
+    /// Emits the current brightness first, then again on every change, by polling every
+    /// `pollInterval` seconds (clamped to ≥ 0.01). (Apple's private change-notification
+    /// selector exists but has an undocumented block signature; polling is the stable path.)
+    /// The stream ends when the consuming task is cancelled. The keyboard is retained by
+    /// the stream, so `discover()?.defaultKeyboard.brightnessStream()` works without
+    /// keeping your own reference.
     public func brightnessStream(pollInterval: TimeInterval = 0.1) -> AsyncStream<Double> {
-        AsyncStream { continuation in
-            let task = Task.detached { [weak self] in
+        let interval = max(0.01, pollInterval)
+        return AsyncStream { continuation in
+            let task = Task.detached {
                 var last = -1.0
                 while !Task.isCancelled {
-                    guard let self else { break }
                     let b = self.brightness
                     if abs(b - last) > 0.0005 { last = b; continuation.yield(b) }
-                    try? await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 }
                 continuation.finish()
             }
@@ -302,7 +318,7 @@ extension Keyboard: CustomStringConvertible {
 /// All of `Keyboard`'s properties are forwarded to `defaultKeyboard` via dynamic member
 /// lookup, so `kb.brightness`, `kb.nits`, `kb.autoBrightness`, … just work.
 @dynamicMemberLookup
-public final class KeyboardBacklight {
+public final class KeyboardBacklight: Sendable {
 
     /// Every backlight-capable keyboard currently present. Never empty.
     public let keyboards: [Keyboard]
@@ -361,9 +377,22 @@ public final class KeyboardBacklight {
         set { defaultKeyboard[keyPath: keyPath] = newValue }
     }
 
-    // Methods aren't covered by dynamic member lookup — forward the main ones.
+    // Methods aren't covered by dynamic member lookup — forward ALL of them, so the rule
+    // stays simple: everything on Keyboard also works on KeyboardBacklight.
     public func setBrightness(_ value: Double, fade: FadeSpeed = .instant) throws {
         try defaultKeyboard.setBrightness(value, fade: fade)
+    }
+    public func setAutoBrightness(_ enabled: Bool) throws {
+        try defaultKeyboard.setAutoBrightness(enabled)
+    }
+    public func setIdleDimTime(_ seconds: TimeInterval) throws {
+        try defaultKeyboard.setIdleDimTime(seconds)
+    }
+    public func disableIdleDim() throws {
+        try defaultKeyboard.disableIdleDim()
+    }
+    public func brightnessStream(pollInterval: TimeInterval = 0.1) -> AsyncStream<Double> {
+        defaultKeyboard.brightnessStream(pollInterval: pollInterval)
     }
     @discardableResult
     public func withManualControl<T>(_ body: (Keyboard) throws -> T) rethrows -> T {

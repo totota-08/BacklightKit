@@ -27,7 +27,7 @@ guard !encoding.pulses.isEmpty else {
 }
 if !encoding.skipped.isEmpty { print("skipping unsupported characters: \(String(encoding.skipped))") }
 print(String(format: "💡 sending \"%@\" — about %.1fs (unit %.0fms, peak %.0f%%)",
-             text, Morse.duration(for: text, unit: unit), unit * 1000, peak * 100))
+             text, encoding.duration(unit: unit), unit * 1000, peak * 100))
 
 kb.withManualControl { board in
     for p in encoding.pulses {

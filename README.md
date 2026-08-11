@@ -30,6 +30,9 @@ keyboard 95158913 (built-in)
   light output     : 5.36 nits
   auto supported   : true
   auto brightness  : true
+  saturated        : false
+  suppressed       : false
+  dimmed (idle)    : false
   idle dim time    : 0.00 s
 ```
 
@@ -203,8 +206,8 @@ print(kb.brightness)
 // One error story: every write has a throwing method. The property setters are
 // fire-and-forget conveniences that ignore failure.
 try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
-try kb.defaultKeyboard.setAutoBrightness(false)
-try kb.defaultKeyboard.setIdleDimTime(30)
+try kb.setAutoBrightness(false)
+try kb.setIdleDimTime(30)
 
 // Scoped manual control: saves brightness + auto, disables auto, ALWAYS restores.
 try kb.withManualControl { board in

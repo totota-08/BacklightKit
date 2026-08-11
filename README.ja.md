@@ -30,6 +30,9 @@ keyboard 95158913 (built-in)
   light output     : 5.36 nits
   auto supported   : true
   auto brightness  : true
+  saturated        : false
+  suppressed       : false
+  dimmed (idle)    : false
   idle dim time    : 0.00 s
 ```
 
@@ -200,8 +203,8 @@ print(kb.brightness)
 // エラー方針は一本: 書き込みは全て throwing メソッドを持つ。
 // プロパティ setter は失敗を無視する fire-and-forget の便宜版。
 try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
-try kb.defaultKeyboard.setAutoBrightness(false)
-try kb.defaultKeyboard.setIdleDimTime(30)
+try kb.setAutoBrightness(false)
+try kb.setIdleDimTime(30)
 
 // スコープ付き手動制御: 輝度+autoを保存し、autoを切り、必ず復元する。
 try kb.withManualControl { board in

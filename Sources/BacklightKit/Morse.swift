@@ -34,6 +34,11 @@ public enum Morse {
         public let pulses: [Pulse]
         /// Characters that had no Morse mapping, in input order.
         public let skipped: [Character]
+
+        /// Total length of the encoding in Morse units.
+        public var totalUnits: Int { pulses.reduce(0) { $0 + $1.units } }
+        /// Total playback time at a given unit length (seconds).
+        public func duration(unit: TimeInterval) -> TimeInterval { Double(totalUnits) * unit }
     }
 
     /// Encode text into pulses.
@@ -72,7 +77,8 @@ public enum Morse {
     }
 
     /// Total playback time for `text` at a given unit length (seconds).
+    /// If you already hold an `Encoding`, use its `duration(unit:)` instead of re-encoding.
     public static func duration(for text: String, unit: TimeInterval) -> TimeInterval {
-        Double(pulses(for: text).pulses.reduce(0) { $0 + $1.units }) * unit
+        pulses(for: text).duration(unit: unit)
     }
 }

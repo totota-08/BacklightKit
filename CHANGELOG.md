@@ -45,6 +45,23 @@ still in 0.x; migration is mechanical (see below).
 - The CLI's `pulse` and `morse` are rebuilt on `withManualControl` (the library's own
   restore machinery) instead of hand-rolling save/restore.
 
+### Fixed (from independent API review)
+- **`brightnessStream` no longer dies silently**: the polling task now retains the
+  keyboard, so `discover()?.defaultKeyboard.brightnessStream()` works without keeping your
+  own reference (it previously ended the stream immediately). Negative/zero `pollInterval`
+  is clamped instead of trapping. Docs now state the stream emits the current value first.
+- **`KeyboardBacklight` is `Sendable`** — usable under Swift 6 strict concurrency.
+- **Method forwarding is symmetric**: `setAutoBrightness`, `setIdleDimTime`,
+  `disableIdleDim`, and `brightnessStream` are forwarded to `defaultKeyboard` too, so the
+  rule is simply "everything on `Keyboard` also works on `KeyboardBacklight`".
+- **Errors conform to `LocalizedError`** — `error.localizedDescription` shows the real
+  message instead of a generic NSError bridge string.
+- `Morse.Encoding` gained `totalUnits` / `duration(unit:)`, so holders of an encoding
+  don't re-encode just to get the playback time (the CLI did exactly that).
+- CLI: negative `--unit` / `--duration` / `--period` values are clamped instead of
+  trapping at runtime; docs note that enum cases may grow (use `default` in switches),
+  that `withManualControl` is not reentrant, and that restore is best-effort.
+
 ## 0.2.1
 
 Follow-up fixes from code review.

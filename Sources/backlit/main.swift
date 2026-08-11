@@ -135,7 +135,7 @@ case "dim":
 
 case "fade":
     guard let s = opts.first, let target = Double(s) else { die("usage: backlit fade <0..1> [--duration SEC]") }
-    let dur = Double(opts.value("--duration") ?? "") ?? 0.6
+    let dur = max(0.05, Double(opts.value("--duration") ?? "") ?? 0.6)   // clamp: negative would trap in usleep
     let start = board.brightness
     restoreOnInterrupt(brightness: start, auto: board.autoBrightness)   // Ctrl-C → back to start
     let steps = max(1, Int(dur / 0.016))
@@ -148,7 +148,7 @@ case "fade":
 case "pulse":
     let lo = clamp(Double(opts.value("--min") ?? "") ?? 0.0)
     let hi = clamp(Double(opts.value("--max") ?? "") ?? 1.0)
-    let period = Double(opts.value("--period") ?? "") ?? 1.6
+    let period = max(0.1, Double(opts.value("--period") ?? "") ?? 1.6)
     let count = Int(opts.value("--count") ?? "") ?? 0     // 0 = forever
     restoreOnInterrupt(brightness: board.brightness, auto: board.autoBrightness)
     board.withManualControl { b in
@@ -163,12 +163,12 @@ case "pulse":
 
 case "morse":
     guard let text = opts.first else { die("usage: backlit morse <text> [--unit SEC] [--peak 0..1]") }
-    let unit = Double(opts.value("--unit") ?? "") ?? 0.13
+    let unit = max(0.005, Double(opts.value("--unit") ?? "") ?? 0.13)   // clamp: negative/zero would trap in usleep
     let peak = clamp(Double(opts.value("--peak") ?? "") ?? 1.0)
     let encoding = Morse.pulses(for: text)
     if encoding.pulses.isEmpty { die("nothing to send in \"\(text)\"") }
     if !encoding.skipped.isEmpty { print("skipping unsupported: \(String(encoding.skipped))") }
-    print(String(format: "sending \"%@\" — about %.1fs", text, Morse.duration(for: text, unit: unit)))
+    print(String(format: "sending \"%@\" — about %.1fs", text, encoding.duration(unit: unit)))
     restoreOnInterrupt(brightness: board.brightness, auto: board.autoBrightness)   // Ctrl-C mid-send restores
     board.withManualControl { b in
         for p in encoding.pulses {
