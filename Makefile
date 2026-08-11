@@ -17,8 +17,8 @@ install: release
 uninstall:
 	rm -f $(PREFIX)/bin/kbdlight
 
-test: release
-	$(BIN) info
+test:
+	swift test
 
 clean:
 	swift package clean

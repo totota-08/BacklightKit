@@ -14,5 +14,20 @@ let package = Package(
             name: "kbdlight",
             dependencies: ["MacKeyboardBacklight"]
         ),
+        // Examples — run with `swift run example-morse SOS` / `swift run example-typeglow`.
+        .executableTarget(
+            name: "example-morse",
+            dependencies: ["MacKeyboardBacklight"],
+            path: "examples/morse"
+        ),
+        .executableTarget(
+            name: "example-typeglow",
+            dependencies: ["MacKeyboardBacklight"],
+            path: "examples/typeglow"
+        ),
+        .testTarget(
+            name: "MacKeyboardBacklightTests",
+            dependencies: ["MacKeyboardBacklight"]
+        ),
     ]
 )

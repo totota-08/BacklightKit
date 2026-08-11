@@ -1,0 +1,127 @@
+name: Release
+
+# When code lands on main, read the version from the source of truth
+# (`let version = "x.y.z"` in the CLI). If no release exists for that version yet,
+# build a binary, create the tag + GitHub Release with auto-generated notes, and
+# (optionally) bump the Homebrew tap formula.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from source
+        id: v
+        run: |
+          VERSION=$(grep -Eo 'let version = "[0-9]+\.[0-9]+\.[0-9]+"' Sources/kbdlight/main.swift \
+                    | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+          if [ -z "$VERSION" ]; then echo "could not parse version"; exit 1; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version v$VERSION"
+
+      - name: Skip if release already exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.v.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.v.outputs.version }} already released — nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release binary
+        if: steps.check.outputs.exists == 'false'
+        run: swift build -c release
+
+      - name: Test
+        if: steps.check.outputs.exists == 'false'
+        run: swift test
+
+      - name: Package binary + checksum
+        if: steps.check.outputs.exists == 'false'
+        id: pkg
+        run: |
+          V=${{ steps.v.outputs.version }}
+          TAR="kbdlight-$V-macos-arm64.tar.gz"
+          tar -C .build/release -czf "$TAR" kbdlight
+          SHA=$(shasum -a 256 "$TAR" | awk '{print $1}')
+          echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
+          echo "binsha=$SHA" >> "$GITHUB_OUTPUT"
+          # sha256 of the git source tarball (what a source Homebrew formula pins)
+          SRC_SHA=$(curl -sL "https://github.com/${{ github.repository }}/archive/refs/tags/v$V.tar.gz" | shasum -a 256 | awk '{print $1}')
+          echo "srcsha=$SRC_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.v.outputs.version }}
+          gh release create "v$V" "${{ steps.pkg.outputs.tarball }}" \
+            --title "v$V" \
+            --generate-notes \
+            --notes-start-tag "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')" || \
+          gh release create "v$V" "${{ steps.pkg.outputs.tarball }}" --title "v$V" --generate-notes
+
+      - name: Summary
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          {
+            echo "## Released v${{ steps.v.outputs.version }} :rocket:"
+            echo ""
+            echo "| artifact | sha256 |"
+            echo "|---|---|"
+            echo "| binary tarball | \`${{ steps.pkg.outputs.binsha }}\` |"
+            echo "| source tarball | \`${{ steps.pkg.outputs.srcsha }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ---- Optional: auto-bump a Homebrew tap ---------------------------------
+      # Enable by adding a repo secret HOMEBREW_TAP_TOKEN (a PAT with `repo` scope
+      # for the tap repo) and setting TAP_REPO below. Skipped if the secret is absent.
+      - name: Bump Homebrew tap
+        if: steps.check.outputs.exists == 'false' && env.TAP_TOKEN != ''
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_REPO: totota-08/homebrew-tap
+        run: |
+          V=${{ steps.v.outputs.version }}
+          SRC_SHA=${{ steps.pkg.outputs.srcsha }}
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+          cat > tap/Formula/kbdlight.rb <<EOF
+          class Kbdlight < Formula
+            desc "Read & control the Mac's built-in keyboard backlight (CLI + Swift library)"
+            homepage "https://github.com/${{ github.repository }}"
+            url "https://github.com/${{ github.repository }}/archive/refs/tags/v$V.tar.gz"
+            sha256 "$SRC_SHA"
+            license "MIT"
+            head "https://github.com/${{ github.repository }}.git", branch: "main"
+
+            def install
+              system "swift", "build", "-c", "release", "--disable-sandbox"
+              bin.install ".build/release/kbdlight"
+            end
+
+            test do
+              assert_match "$V", shell_output("#{bin}/kbdlight --version")
+            end
+          end
+          EOF
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/kbdlight.rb
+          git commit -m "kbdlight $V" || echo "no changes"
+          git push
