@@ -82,7 +82,9 @@ Prebuilt binaries are attached to every [release](https://github.com/totota-08/k
 
 ## CLI reference
 
-Run `kbdlight help` any time. Every command targets the built-in keyboard by default.
+Run `kbdlight help` any time. Every command targets the built-in keyboard by default; add
+`--keyboard <id>` (ids come from `kbdlight info`) to target another one. `fade`, `pulse`, and
+`morse` restore the previous state on `Ctrl-C` / `SIGTERM`.
 
 ### `info`
 Print the full state of every backlight-capable keyboard.

@@ -3,6 +3,29 @@
 All notable changes to this project are documented here. Releases are cut automatically
 when the `version` in `Sources/kbdlight/main.swift` changes on `main`.
 
+## 0.2.1
+
+Follow-up fixes from code review.
+
+### Fixed
+- **Morse spacing**: text is now split into words first, so leading / trailing / repeated
+  spaces can't leave a stray 7-unit dark gap on the ends or double a word gap to 14 units.
+  Playback never begins or ends on an off-pulse. Added tests for these cases.
+- **`morse` and `fade` now restore state on `Ctrl-C` / `SIGTERM`**, via a shared signal
+  helper (previously only `pulse` did). Interrupting a long send no longer leaves the
+  backlight stuck on or off.
+- **`kbdlight set --fade 0.5`** (flag before value) no longer errors — flags are parsed
+  independently of position.
+
+### Added
+- **`--keyboard <id>`** global flag to target a non-default keyboard from the CLI
+  (the library was already multi-keyboard; now the CLI matches).
+
+### Changed
+- Removed a dead `stop` variable in `pulse`; documented `Keyboard`'s `@unchecked Sendable`
+  contract (safe reads; confine writes to one thread); `example-typeglow` now catches SIGTERM
+  and its restore comment no longer overclaims.
+
 ## 0.2.0
 
 API redesign — subject-first, safer, and Homebrew/CI ready.
