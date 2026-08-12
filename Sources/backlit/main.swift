@@ -24,6 +24,7 @@ func usage() {
       down [step]          Lower brightness
       fade <0..1>          Ramp to a target over --duration SEC (default 0.6)
       pulse                Breathe between --min and --max. --count N, --period SEC
+      flash                Blink N times as a notification. --count, --peak, --on, --off
       morse <text>         Blink text in Morse code. --unit SEC, --peak 0..1
       auto <on|off>        Toggle ambient auto-brightness
       dim <seconds>        Set idle-dim timeout (0 = never)
@@ -43,7 +44,7 @@ func usage() {
 
 // MARK: - Argument parsing (order-independent flags)
 
-let valueFlags: Set<String> = ["--duration", "--unit", "--peak", "--min", "--max", "--period", "--count", "--keyboard"]
+let valueFlags: Set<String> = ["--duration", "--unit", "--peak", "--min", "--max", "--period", "--count", "--keyboard", "--on", "--off"]
 
 struct Args {
     var positionals: [String] = []
@@ -161,6 +162,21 @@ case "pulse":
             for i in 0...half { b.brightness = lo + (hi - lo) * Double(i) / Double(half); usleep(16000) }
             for i in 0...half { b.brightness = hi - (hi - lo) * Double(i) / Double(half); usleep(16000) }
             cycle += 1
+        }
+    }
+
+case "flash":
+    // Discrete blinks as a "done" notification — wire it to a task-completion hook.
+    let count = max(1, Int(opts.value("--count") ?? "") ?? 3)
+    let peak = clamp(Double(opts.value("--peak") ?? "") ?? 1.0)
+    let on = max(0.02, Double(opts.value("--on") ?? "") ?? 0.12)
+    let off = max(0.02, Double(opts.value("--off") ?? "") ?? 0.12)
+    restoreOnInterrupt(brightness: board.brightness, auto: board.autoBrightness)
+    board.withManualControl { b in
+        for i in 0..<count {
+            try? b.setBrightness(peak); usleep(useconds_t(on * 1_000_000))
+            try? b.setBrightness(0)
+            if i < count - 1 { usleep(useconds_t(off * 1_000_000)) }   // no trailing dark wait
         }
     }
 

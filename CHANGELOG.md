@@ -18,8 +18,11 @@ New capabilities from surveying the private `CoreBrightness` surface — additiv
   `withIdleDimmingSuspended { }`): pause idle dimming *without* changing the configured
   `idleDimTime`, then restore the prior state — even on throw. Distinct from `disableIdleDim()`,
   which permanently sets the timeout to 0.
-- CLI: **`hold <command...>`** (run a command with idle dimming suspended) and **`watch`**
+- CLI: **`flash`** (blink N times as a completion notification — wire it to a task-done hook),
+  **`hold <command...>`** (run a command with idle dimming suspended) and **`watch`**
   (print brightness on every change, event-driven). `info` now shows the suspend state.
+- README: explicit **macOS-only** notice and a **verification-scope** note (tested on Apple
+  Silicon M1 only; other Macs are unverified as the author doesn't own them).
 
 ### Investigated but deferred (intentionally not shipped)
 - **Ambient light in lux (`currentLux`) and hardware brightness ramps

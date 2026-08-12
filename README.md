@@ -21,7 +21,8 @@ macOS never shipped a public API for the keyboard backlight. **BacklightKit** wr
 read the brightness, set it, watch its real light output in nits, and script light effects —
 with **no `sudo`, no entitlements, and no SIP changes**.
 
-Zero dependencies. One binary. Works on Apple Silicon and Intel Macs with a backlit keyboard.
+Zero dependencies. One binary. **macOS only** — see [Platform & verification](#platform--verification)
+(tested on Apple Silicon M1; other Macs are unverified since I don't own them).
 
 ```console
 $ backlit info
@@ -47,7 +48,7 @@ keyboard 95158913 (built-in)
 - [Library](#library)
 - [Examples](#examples)
 - [How it works](#how-it-works)
-- [Verified on](#verified-on)
+- [Platform & verification](#platform--verification)
 - [FAQ](#faq)
 - [Contributing](#contributing)
 - [License](#license)
@@ -182,6 +183,26 @@ backlit dim 5
 backlit dim 0
 ```
 
+### `flash [options]`
+Blink the backlight a few times as a **notification**, then restore. Handy to wire to a
+task-completion hook ("build done", "tests passed").
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--count <n>` | `3` | Number of blinks |
+| `--peak <0..1>` | `1.0` | Brightness of each blink |
+| `--on <sec>` | `0.12` | On duration per blink |
+| `--off <sec>` | `0.12` | Off gap between blinks |
+
+```sh
+backlit flash                       # 3 quick blinks, then back to where it was
+make build && backlit flash         # blink when the build finishes
+backlit flash --count 5 --peak 0.7  # gentler, five times
+```
+
+> Wire it to a completion hook — e.g. a Claude Code **Stop** hook that runs `backlit flash`
+> so the keyboard blinks whenever a task finishes.
+
 ### `hold <command...>`
 Run a command with idle dimming **suspended**, then restore the previous state — without
 touching your configured `dim` timeout. Useful for keeping the keyboard lit through a task.
@@ -300,13 +321,23 @@ links against **nothing private at build time**. Capabilities are probed with `r
 startup, so "unsupported" surfaces as `nil` and `KeyboardBacklight()` returns `nil` on hardware
 where the core selectors are missing — no crashes, no fake zeros.
 
-## Verified on
+## Platform & verification
+
+**macOS only.** This wraps a macOS-private Apple framework and has no meaning on any other
+OS — it won't build or run on Linux/Windows, and there's no cross-platform fallback.
+
+**Only verified on Apple Silicon (M1).** I don't own any other Mac, so I can't test Intel
+Macs, other Apple Silicon generations (M2/M3/M4), or other macOS versions. The code is written
+defensively — every private call is capability-checked and degrades to `nil`/`false` rather
+than crashing — so it *should* work anywhere with a backlit keyboard, but everything outside
+the row below is **unverified**.
 
 | Mac | Chip | macOS | Status |
 |---|---|---|---|
-| MacBook Air (2020) | Apple M1 | 26.x | ✅ read + write, nits, auto, idle-dim |
+| MacBook Air (2020) | Apple M1 | 26.x | ✅ read + write, nits, auto, idle-dim, events, suspend |
 
-Tested on more hardware? A PR adding a row (with your model + `sw_vers` build) is very welcome.
+If you run it on other hardware, a PR adding a row (with your model + `sw_vers` build, and
+whether it worked) is genuinely useful — it's the only way this table grows.
 Behavior notes: built-in keyboards expose **one** white zone (no per-key/RGB); `idleDimTime = 0`
 means idle dimming is **off**.
 
