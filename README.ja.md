@@ -21,7 +21,8 @@ macOS はキーボードバックライトの公開 API を一度も用意して
 光量（nits）の取得、点滅エフェクトのスクリプト化を可能にします。しかも
 **`sudo` 不要・entitlements 不要・SIP 変更も不要**。
 
-依存ゼロ。バイナリ 1 つ。バックライト付きキーボードを持つ Apple Silicon / Intel Mac で動作します。
+依存ゼロ。バイナリ 1 つ。**macOS 専用** —— [対応環境と検証状況](#対応環境と検証状況)を参照
+（Apple Silicon M1 で検証済み。他の Mac は作者が所有しておらず未検証）。
 
 ```console
 $ backlit info
@@ -38,7 +39,7 @@ keyboard 95158913 (built-in)
 
 > ⚠️ **非公開 API です。** Objective-C ランタイム経由で Apple の未公開フレームワークを呼びます。
 > 特権は不要で安全に劣化しますが、macOS のアップデートで変更・削除される可能性があります。
-> [仕組み](#仕組み) と [動作確認済み](#動作確認済み) を参照。
+> [仕組み](#仕組み) と [対応環境と検証状況](#対応環境と検証状況) を参照。
 
 ## 目次
 
@@ -47,7 +48,7 @@ keyboard 95158913 (built-in)
 - [ライブラリ](#ライブラリ)
 - [サンプル](#サンプル)
 - [仕組み](#仕組み)
-- [動作確認済み](#動作確認済み)
+- [対応環境と検証状況](#対応環境と検証状況)
 - [よくある質問](#よくある質問)
 - [コントリビュート](#コントリビュート)
 - [ライセンス](#ライセンス)
@@ -180,6 +181,26 @@ backlit dim 5
 backlit dim 0
 ```
 
+### `flash [オプション]`
+バックライトを数回点滅させる**通知**。終わったら元に戻します。タスク完了フックに繋ぐと便利
+（「ビルド完了」「テスト通過」など）。
+
+| オプション | 既定値 | 意味 |
+|---|---|---|
+| `--count <n>` | `3` | 点滅回数 |
+| `--peak <0..1>` | `1.0` | 各点滅の明るさ |
+| `--on <秒>` | `0.12` | 1回あたりの点灯時間 |
+| `--off <秒>` | `0.12` | 点滅間の消灯時間 |
+
+```sh
+backlit flash                       # 3回さっと点滅して元に戻る
+make build && backlit flash         # ビルド完了時に点滅
+backlit flash --count 5 --peak 0.7  # 控えめに5回
+```
+
+> 完了フックに繋ぐ —— 例えば Claude Code の **Stop** フックで `backlit flash` を走らせれば、
+> タスクが終わるたびにキーボードが点滅します。
+
 ### `hold <command...>`
 アイドル減光を**一時停止**した状態でコマンドを実行し、終わったら元の状態に戻します。設定済みの
 `dim` タイマーには触れません。作業中だけキーボードを点灯させ続けたいときに。
@@ -219,9 +240,10 @@ print(kb.brightness)
 
 // エラー方針は一本: 書き込みは全て throwing メソッドを持つ。
 // プロパティ setter は失敗を無視する fire-and-forget の便宜版。
-try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
-try kb.setAutoBrightness(false)
-try kb.setIdleDimTime(30)
+let board = kb.defaultKeyboard
+try board.setBrightness(1.0, fade: .slow)            // FadeSpeed: .instant / .slow / .fast
+try board.setAutoBrightness(false)
+try board.setIdleDimTime(30)
 
 // スコープ付き手動制御: 輝度+autoを保存し、autoを切り、必ず復元する。
 try kb.withManualControl { board in
@@ -229,13 +251,6 @@ try kb.withManualControl { board in
         try board.setBrightness(1); usleep(120_000)
         try board.setBrightness(0); usleep(120_000)
     }
-}
-
-// async 版ならスレッドをブロックせず Task.sleep が使える。
-try await kb.withManualControl { board in
-    try board.setBrightness(1)
-    try await Task.sleep(nanoseconds: 120_000_000)
-    try board.setBrightness(0)
 }
 
 // 「非対応」は偽の 0 ではなく nil。
@@ -251,11 +266,11 @@ Task {
 
 // 設定済みの dim タイマーを変えずに、作業中だけ点灯を維持。body が throw しても
 // 直前の suspend 状態を必ず復元する。
-try kb.withIdleDimmingSuspended {
+try board.withIdleDimmingSuspended {
     runLongPresentation()
 }
 
-// デフォルト以外も含め全キーボード。Keyboard は Identifiable + Hashable なので
+// デフォルト以外も含め全キーボード。Keyboard は Identifiable なので
 // SwiftUI の ForEach にそのまま渡せる。
 for keyboard in kb.keyboards {
     print(keyboard.id, keyboard.isBuiltIn, keyboard.brightness)
@@ -265,15 +280,15 @@ for keyboard in kb.keyboards {
 **`Keyboard`** — `brightness`（get/set・`Double`）, `setBrightness(_:fade:) throws`,
 `nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
 `isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?`（読み取り専用）,
-`setIdleDimTime(_:) throws`, `disableIdleDim() throws`,
+`setIdleDimTime(_:) throws`,
 `isIdleDimmingSuspended: Bool?`, `setIdleDimmingSuspended(_:) throws`, `withIdleDimmingSuspended { }`,
-`withManualControl { }`（sync + async）,
-`brightnessStream(pollInterval:preferPolling:)`（対応環境ではイベント駆動）, `isBuiltIn`。
-`Identifiable`・`Hashable`・`Sendable`。
+`withManualControl { }`,
+`brightnessStream(pollInterval:)`（対応環境ではイベント駆動）, `isBuiltIn`。
+`Identifiable`・`Sendable`。
 
 **`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
-（`DiscoveryError` で理由つき失敗）、加えて `Keyboard` 全プロパティの dynamic member 委譲。
-型は一貫して `Double`/`TimeInterval`、非対応の読み取りは `Optional`。
+（`DiscoveryError` で理由つき失敗）、加えて `Keyboard` 全プロパティの dynamic member 委譲と
+`withManualControl { }` の転送。型は一貫して `Double`/`TimeInterval`、非対応の読み取りは `Optional`。
 
 ## サンプル
 
@@ -297,13 +312,22 @@ IORegistry に `kbd-backlight` という `AppleARMPWMDevice` として現れま�
 「非対応」は `nil` として表面化し、コアのセレクタが無い機種では `KeyboardBacklight()` が `nil` を
 返します —— クラッシュも偽のゼロもありません。
 
-## 動作確認済み
+## 対応環境と検証状況
+
+**macOS 専用。** これは macOS 非公開の Apple フレームワークをラップするもので、他の OS では
+意味を持ちません —— Linux/Windows ではビルドも実行もできず、クロスプラットフォームの代替もありません。
+
+**検証できているのは Apple Silicon (M1) のみ。** 作者は他の Mac を所有していないため、Intel Mac・
+他世代の Apple Silicon（M2/M3/M4）・他の macOS バージョンでは動作確認できていません。コードは
+防御的に書かれており（各非公開呼び出しは機能判定つきで、クラッシュせず `nil`/`false` に劣化）、
+バックライト付きキーボードがあれば動く**はず**ですが、下表以外はすべて**未検証**です。
 
 | Mac | チップ | macOS | 状態 |
 |---|---|---|---|
-| MacBook Air (2020) | Apple M1 | 26.x | ✅ 読み書き / nits / auto / idle-dim |
+| MacBook Air (2020) | Apple M1 | 26.x | ✅ 読み書き / nits / auto / idle-dim / イベント / suspend |
 
-他の機種で試したら、モデル名と `sw_vers` のビルドを添えて行を追加する PR を歓迎します。
+他の機種で動かしたら、モデル名と `sw_vers` のビルド（と動いたかどうか）を添えて行を追加する PR は
+本当に助かります —— この表が増える唯一の手段です。
 補足: 内蔵キーボードは白色ゾーンが **1 つ**（キー個別/RGB 不可）、`idleDimTime = 0` は
 アイドル減光 **無効** を意味します。
 

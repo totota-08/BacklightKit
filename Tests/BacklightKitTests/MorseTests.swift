@@ -60,8 +60,8 @@ final class MorseTests: XCTestCase {
 
     func testDurationMatchesUnitSum() {
         let unit = 0.1
-        let pulses = Morse.pulses(for: "SOS").pulses
-        let expected = Double(pulses.reduce(0) { $0 + $1.units }) * unit
-        XCTAssertEqual(Morse.duration(for: "SOS", unit: unit), expected, accuracy: 1e-9)
+        let enc = Morse.pulses(for: "SOS")
+        let expected = Double(enc.pulses.reduce(0) { $0 + $1.units }) * unit
+        XCTAssertEqual(enc.duration(unit: unit), expected, accuracy: 1e-9)
     }
 }
