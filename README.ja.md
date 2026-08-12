@@ -240,9 +240,10 @@ print(kb.brightness)
 
 // エラー方針は一本: 書き込みは全て throwing メソッドを持つ。
 // プロパティ setter は失敗を無視する fire-and-forget の便宜版。
-try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
-try kb.setAutoBrightness(false)
-try kb.setIdleDimTime(30)
+let board = kb.defaultKeyboard
+try board.setBrightness(1.0, fade: .slow)            // FadeSpeed: .instant / .slow / .fast
+try board.setAutoBrightness(false)
+try board.setIdleDimTime(30)
 
 // スコープ付き手動制御: 輝度+autoを保存し、autoを切り、必ず復元する。
 try kb.withManualControl { board in
@@ -250,13 +251,6 @@ try kb.withManualControl { board in
         try board.setBrightness(1); usleep(120_000)
         try board.setBrightness(0); usleep(120_000)
     }
-}
-
-// async 版ならスレッドをブロックせず Task.sleep が使える。
-try await kb.withManualControl { board in
-    try board.setBrightness(1)
-    try await Task.sleep(nanoseconds: 120_000_000)
-    try board.setBrightness(0)
 }
 
 // 「非対応」は偽の 0 ではなく nil。
@@ -272,11 +266,11 @@ Task {
 
 // 設定済みの dim タイマーを変えずに、作業中だけ点灯を維持。body が throw しても
 // 直前の suspend 状態を必ず復元する。
-try kb.withIdleDimmingSuspended {
+try board.withIdleDimmingSuspended {
     runLongPresentation()
 }
 
-// デフォルト以外も含め全キーボード。Keyboard は Identifiable + Hashable なので
+// デフォルト以外も含め全キーボード。Keyboard は Identifiable なので
 // SwiftUI の ForEach にそのまま渡せる。
 for keyboard in kb.keyboards {
     print(keyboard.id, keyboard.isBuiltIn, keyboard.brightness)
@@ -286,15 +280,15 @@ for keyboard in kb.keyboards {
 **`Keyboard`** — `brightness`（get/set・`Double`）, `setBrightness(_:fade:) throws`,
 `nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
 `isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?`（読み取り専用）,
-`setIdleDimTime(_:) throws`, `disableIdleDim() throws`,
+`setIdleDimTime(_:) throws`,
 `isIdleDimmingSuspended: Bool?`, `setIdleDimmingSuspended(_:) throws`, `withIdleDimmingSuspended { }`,
-`withManualControl { }`（sync + async）,
-`brightnessStream(pollInterval:preferPolling:)`（対応環境ではイベント駆動）, `isBuiltIn`。
-`Identifiable`・`Hashable`・`Sendable`。
+`withManualControl { }`,
+`brightnessStream(pollInterval:)`（対応環境ではイベント駆動）, `isBuiltIn`。
+`Identifiable`・`Sendable`。
 
 **`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
-（`DiscoveryError` で理由つき失敗）、加えて `Keyboard` 全プロパティの dynamic member 委譲。
-型は一貫して `Double`/`TimeInterval`、非対応の読み取りは `Optional`。
+（`DiscoveryError` で理由つき失敗）、加えて `Keyboard` 全プロパティの dynamic member 委譲と
+`withManualControl { }` の転送。型は一貫して `Double`/`TimeInterval`、非対応の読み取りは `Optional`。
 
 ## サンプル
 

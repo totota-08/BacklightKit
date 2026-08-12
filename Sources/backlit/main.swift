@@ -3,7 +3,7 @@ import BacklightKit
 
 // Single source of truth for the version. Bumping this on `main` is what drives the
 // Release workflow to tag + publish — the git tag is derived from here, never hand-synced.
-let version = "0.4.0"
+let version = "0.5.0"
 
 func die(_ msg: String) -> Never {
     FileHandle.standardError.write(Data("backlit: \(msg)\n".utf8)); exit(1)

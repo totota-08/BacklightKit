@@ -243,9 +243,10 @@ print(kb.brightness)
 
 // One error story: every write has a throwing method. The property setters are
 // fire-and-forget conveniences that ignore failure.
-try kb.setBrightness(1.0, fade: .slow)               // FadeSpeed: .instant / .slow / .fast
-try kb.setAutoBrightness(false)
-try kb.setIdleDimTime(30)
+let board = kb.defaultKeyboard
+try board.setBrightness(1.0, fade: .slow)            // FadeSpeed: .instant / .slow / .fast
+try board.setAutoBrightness(false)
+try board.setIdleDimTime(30)
 
 // Scoped manual control: saves brightness + auto, disables auto, ALWAYS restores.
 try kb.withManualControl { board in
@@ -253,13 +254,6 @@ try kb.withManualControl { board in
         try board.setBrightness(1); usleep(120_000)
         try board.setBrightness(0); usleep(120_000)
     }
-}
-
-// The async variant lets you use Task.sleep instead of blocking a thread.
-try await kb.withManualControl { board in
-    try board.setBrightness(1)
-    try await Task.sleep(nanoseconds: 120_000_000)
-    try board.setBrightness(0)
 }
 
 // "Unsupported" is nil, never a fake 0.
@@ -275,11 +269,11 @@ Task {
 
 // Keep the keyboard lit through a task without changing the configured dim timeout;
 // the previous suspend state is always restored, even if the body throws.
-try kb.withIdleDimmingSuspended {
+try board.withIdleDimmingSuspended {
     runLongPresentation()
 }
 
-// Every keyboard, not just the default. Keyboard is Identifiable + Hashable,
+// Every keyboard, not just the default. Keyboard is Identifiable,
 // so kb.keyboards drops straight into SwiftUI's ForEach.
 for keyboard in kb.keyboards {
     print(keyboard.id, keyboard.isBuiltIn, keyboard.brightness)
@@ -289,15 +283,16 @@ for keyboard in kb.keyboards {
 **`Keyboard`** — `brightness` (get/set, `Double`), `setBrightness(_:fade:) throws`,
 `nits: Double?`, `autoBrightness`, `setAutoBrightness(_:) throws`, `supportsAutoBrightness`,
 `isSaturated/isSuppressed/isDimmed: Bool?`, `idleDimTime: TimeInterval?` (read-only),
-`setIdleDimTime(_:) throws`, `disableIdleDim() throws`,
+`setIdleDimTime(_:) throws`,
 `isIdleDimmingSuspended: Bool?`, `setIdleDimmingSuspended(_:) throws`, `withIdleDimmingSuspended { }`,
-`withManualControl { }` (sync + async),
-`brightnessStream(pollInterval:preferPolling:)` (event-driven when available), `isBuiltIn`.
-`Identifiable`, `Hashable`, `Sendable`.
+`withManualControl { }`,
+`brightnessStream(pollInterval:)` (event-driven when available), `isBuiltIn`.
+`Identifiable`, `Sendable`.
 
 **`KeyboardBacklight`** — `keyboards`, `defaultKeyboard`, `builtIn`, `discover() throws`
 (reasoned failures via `DiscoveryError`), plus dynamic-member forwarding of every `Keyboard`
-property. Types are `Double`/`TimeInterval` throughout; unsupported readings are `Optional`.
+property and a forwarded `withManualControl { }`. Types are `Double`/`TimeInterval`
+throughout; unsupported readings are `Optional`.
 
 ## Examples
 

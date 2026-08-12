@@ -75,10 +75,4 @@ public enum Morse {
         }
         return Encoding(pulses: out, skipped: skipped)
     }
-
-    /// Total playback time for `text` at a given unit length (seconds).
-    /// If you already hold an `Encoding`, use its `duration(unit:)` instead of re-encoding.
-    public static func duration(for text: String, unit: TimeInterval) -> TimeInterval {
-        pulses(for: text).duration(unit: unit)
-    }
 }

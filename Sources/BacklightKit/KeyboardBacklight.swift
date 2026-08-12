@@ -84,7 +84,6 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
     private let client: NSObject
     // Capability flags, resolved once so "unsupported" and "value is 0" never get confused.
     private let canSetFade: Bool
-    private let canSetPlain: Bool
     private let canNits: Bool
     private let canIdleDim: Bool
     private let canSaturated: Bool
@@ -100,7 +99,6 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
         self.isBuiltIn              = Keyboard.boolCall(client, "isKeyboardBuiltIn:", id)
         self.supportsAutoBrightness = Keyboard.boolCall(client, "isAmbientFeatureAvailableOnKeyboard:", id)
         self.canSetFade       = has("setBrightness:fadeSpeed:commit:forKeyboard:")
-        self.canSetPlain      = has("setBrightness:forKeyboard:")
         self.canNits          = has("backlightLevelForKeyboard:")
         self.canIdleDim       = has("idleDimTimeForKeyboard:")
         self.canSaturated     = has("isBacklightSaturatedOnKeyboard:")
@@ -123,19 +121,11 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
     /// feature is unavailable.
     public func setBrightness(_ value: Double, fade: FadeSpeed = .instant) throws {
         let v = Float(max(0, min(1, value)))
-        if canSetFade {
-            let sel = NSSelectorFromString("setBrightness:fadeSpeed:commit:forKeyboard:")
-            typealias Fn = @convention(c) (NSObject, Selector, Float, Int32, Bool, UInt64) -> Bool
-            let ok = unsafeBitCast(client.method(for: sel), to: Fn.self)(client, sel, v, fade.raw, true, id)
-            if !ok { throw KeyboardBacklightError.setFailed }
-        } else if canSetPlain {
-            let sel = NSSelectorFromString("setBrightness:forKeyboard:")
-            typealias Fn = @convention(c) (NSObject, Selector, Float, UInt64) -> Bool
-            let ok = unsafeBitCast(client.method(for: sel), to: Fn.self)(client, sel, v, id)
-            if !ok { throw KeyboardBacklightError.setFailed }
-        } else {
-            throw KeyboardBacklightError.unsupported("setBrightness")
-        }
+        guard canSetFade else { throw KeyboardBacklightError.unsupported("setBrightness") }
+        let sel = NSSelectorFromString("setBrightness:fadeSpeed:commit:forKeyboard:")
+        typealias Fn = @convention(c) (NSObject, Selector, Float, Int32, Bool, UInt64) -> Bool
+        let ok = unsafeBitCast(client.method(for: sel), to: Fn.self)(client, sel, v, fade.raw, true, id)
+        if !ok { throw KeyboardBacklightError.setFailed }
     }
 
     // MARK: Physical light output
@@ -180,7 +170,7 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
 
     /// Seconds of inactivity before the backlight dims. **`0` means idle dimming is
     /// disabled** (verified: the default is `0` and the keyboard stays lit). `nil` if
-    /// unsupported. Read-only — change it with `setIdleDimTime(_:)` / `disableIdleDim()`.
+    /// unsupported. Read-only — change it with `setIdleDimTime(_:)`.
     public var idleDimTime: TimeInterval? {
         canIdleDim ? doubleCall("idleDimTimeForKeyboard:") : nil
     }
@@ -194,9 +184,6 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
         let ok = unsafeBitCast(client.method(for: sel), to: Fn.self)(client, sel, seconds, id)
         if !ok { throw KeyboardBacklightError.setFailed }
     }
-
-    /// Turn off idle-driven dimming (`setIdleDimTime(0)`).
-    public func disableIdleDim() throws { try setIdleDimTime(0) }
 
     // MARK: Idle-dim suspend (temporary, non-destructive)
 
@@ -264,29 +251,6 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
         return try body(self)
     }
 
-    /// Async variant of `withManualControl(_:)` — lets `body` use `Task.sleep` instead
-    /// of blocking a thread. Same save/disable-auto/always-restore contract.
-    ///
-    /// ```swift
-    /// try await keyboard.withManualControl { kb in
-    ///     for _ in 0..<3 {
-    ///         try kb.setBrightness(1); try await Task.sleep(nanoseconds: 120_000_000)
-    ///         try kb.setBrightness(0); try await Task.sleep(nanoseconds: 120_000_000)
-    ///     }
-    /// }
-    /// ```
-    @discardableResult
-    public func withManualControl<T>(_ body: (Keyboard) async throws -> T) async rethrows -> T {
-        let savedBrightness = brightness
-        let savedAuto = autoBrightness
-        try? setAutoBrightness(false)
-        defer {
-            try? setBrightness(savedBrightness)
-            try? setAutoBrightness(savedAuto)
-        }
-        return try await body(self)
-    }
-
     // MARK: Change monitoring
 
     /// Emits the current brightness first, then again on every change.
@@ -294,15 +258,13 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
     /// When the OS exposes its change-notification selector (verified on macOS 12+), this
     /// is **event-driven** — the system pushes each change, so there is no polling and no
     /// latency, and `pollInterval` is ignored. On systems where that selector is missing it
-    /// falls back to polling every `pollInterval` seconds (clamped to ≥ 0.01). Pass
-    /// `preferPolling: true` to force the polling path.
+    /// falls back to polling every `pollInterval` seconds (clamped to ≥ 0.01).
     ///
     /// The stream ends when the consuming task is cancelled. It retains what it needs, so
     /// `discover()?.defaultKeyboard.brightnessStream()` works without keeping your own
     /// reference.
-    public func brightnessStream(pollInterval: TimeInterval = 0.1,
-                                 preferPolling: Bool = false) -> AsyncStream<Double> {
-        if canNotify, !preferPolling, let stream = notificationStream() { return stream }
+    public func brightnessStream(pollInterval: TimeInterval = 0.1) -> AsyncStream<Double> {
+        if canNotify, let stream = notificationStream() { return stream }
         return pollingStream(pollInterval: pollInterval)
     }
 
@@ -369,11 +331,6 @@ public final class Keyboard: @unchecked Sendable, Identifiable {
         typealias Fn = @convention(c) (NSObject, Selector, UInt64) -> Bool
         return unsafeBitCast(client.method(for: sel), to: Fn.self)(client, sel, id)
     }
-}
-
-extension Keyboard: Equatable, Hashable {
-    public static func == (lhs: Keyboard, rhs: Keyboard) -> Bool { lhs.id == rhs.id }
-    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 extension Keyboard: CustomStringConvertible {
@@ -467,37 +424,11 @@ public final class KeyboardBacklight: Sendable {
         set { defaultKeyboard[keyPath: keyPath] = newValue }
     }
 
-    // Methods aren't covered by dynamic member lookup — forward ALL of them, so the rule
-    // stays simple: everything on Keyboard also works on KeyboardBacklight.
-    public func setBrightness(_ value: Double, fade: FadeSpeed = .instant) throws {
-        try defaultKeyboard.setBrightness(value, fade: fade)
-    }
-    public func setAutoBrightness(_ enabled: Bool) throws {
-        try defaultKeyboard.setAutoBrightness(enabled)
-    }
-    public func setIdleDimTime(_ seconds: TimeInterval) throws {
-        try defaultKeyboard.setIdleDimTime(seconds)
-    }
-    public func disableIdleDim() throws {
-        try defaultKeyboard.disableIdleDim()
-    }
-    public func setIdleDimmingSuspended(_ suspended: Bool) throws {
-        try defaultKeyboard.setIdleDimmingSuspended(suspended)
-    }
-    @discardableResult
-    public func withIdleDimmingSuspended<T>(_ body: () throws -> T) throws -> T {
-        try defaultKeyboard.withIdleDimmingSuspended(body)
-    }
-    public func brightnessStream(pollInterval: TimeInterval = 0.1,
-                                 preferPolling: Bool = false) -> AsyncStream<Double> {
-        defaultKeyboard.brightnessStream(pollInterval: pollInterval, preferPolling: preferPolling)
-    }
+    // Methods aren't covered by dynamic member lookup. Everything else lives on
+    // `defaultKeyboard`; only `withManualControl` is forwarded, because scoped effects on
+    // "the keyboard" are the one thing callers reach for without picking a keyboard first.
     @discardableResult
     public func withManualControl<T>(_ body: (Keyboard) throws -> T) rethrows -> T {
         try defaultKeyboard.withManualControl(body)
-    }
-    @discardableResult
-    public func withManualControl<T>(_ body: (Keyboard) async throws -> T) async rethrows -> T {
-        try await defaultKeyboard.withManualControl(body)
     }
 }

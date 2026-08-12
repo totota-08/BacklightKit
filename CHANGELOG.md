@@ -3,6 +3,26 @@
 All notable changes to this project are documented here. Releases are cut automatically
 when the `version` in `Sources/backlit/main.swift` changes on `main`.
 
+## 0.5.0
+
+Diet release: an over-engineering review (ponytail) cut ~70 lines of API surface that no
+consumer — CLI, examples, or downstream projects — ever called. **Breaking**, but only if
+you used one of the removed conveniences; each has a one-line replacement.
+
+### Removed
+- `KeyboardBacklight`'s method forwarding except `withManualControl { }` (the one with real
+  callers). Call methods on `kb.defaultKeyboard` instead; property forwarding via dynamic
+  member lookup (`kb.brightness = 0.5`) is unchanged.
+- Async `withManualControl` overload — no callers. The sync overload remains; re-add the
+  async one if a SwiftUI consumer actually needs it.
+- `disableIdleDim()` — use `setIdleDimTime(0)`.
+- `brightnessStream`'s `preferPolling:` parameter — the stream picks event-driven when
+  available, polling otherwise; nobody forced the fallback.
+- `setBrightness:forKeyboard:` fallback path — no supported macOS (12+) lacks the
+  `fadeSpeed` variant; the capability check now just throws `.unsupported`.
+- `Keyboard`'s `Equatable`/`Hashable` conformances — unused; `Identifiable` remains.
+- `Morse.duration(for:unit:)` — use `Morse.pulses(for:).duration(unit:)`.
+
 ## 0.4.0
 
 New capabilities from surveying the private `CoreBrightness` surface — additive, no breaking changes.
